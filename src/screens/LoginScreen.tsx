@@ -52,6 +52,9 @@ export const LoginScreen = ({ onLoginSuccess }: LoginScreenProps) => {
     }
 
     setIsLoading(true);
+    
+    // Commented out actual API hit on SignIn button
+    /*
     try {
       const response = await authService.login(username.trim(), password, false);
       setIsLoading(false);
@@ -91,13 +94,38 @@ export const LoginScreen = ({ onLoginSuccess }: LoginScreenProps) => {
       setIsLoading(false);
       Alert.alert('Sign In Error', error.message || 'An error occurred during authentication.');
     }
+    */
+
+    // Set default credentials check: SSSL and Creative@123
+    setTimeout(() => {
+      setIsLoading(false);
+      if (username.trim() === 'SSSL' && password === 'Creative@123') {
+        const mockSession = {
+          token: 'mock-token-sssl-creative123',
+          userId: 'SSSL',
+          userNickName: 'Creative User',
+          sessionId: 999999,
+          coCd: 'SS',
+          div: 1,
+          loc: 1,
+          companyName: 'CAREWORKS One',
+          divisionName: 'BETHANY HOSPITAL',
+          locationName: 'Mumbai',
+          financialYear: 2026,
+          shift: 1,
+          showPasswordToggle: true,
+        };
+        onLoginSuccess(mockSession);
+      } else {
+        Alert.alert('Sign In Failed', 'Invalid Employee ID/Username or Password.');
+      }
+    }, 800);
   };
 
   return (
     <View style={styles.container}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        enabled={Platform.OS === 'ios'}
         style={styles.keyboardView}
       >
         <ScrollView
@@ -120,12 +148,12 @@ export const LoginScreen = ({ onLoginSuccess }: LoginScreenProps) => {
               />
             </View>
             <Text style={styles.hospitalText}>BETHANY HOSPITAL</Text>
-            <Text style={styles.titleText}>IPD Ops</Text>
-            <Text style={styles.subTitleText}>For the IPD Operations Team</Text>
+            <Text style={styles.titleText}>CAREWORKS One</Text>
+            <Text style={styles.subTitleText}>For the Hospital Team</Text>
             
             <View style={styles.badge}>
               <PinIcon color="#ffffff" />
-              <Text style={styles.badgeText}>Powered by CAREWORKS HMIS</Text>
+              <Text style={styles.badgeText}>Powered by SOFSCRIPT PVT LTD</Text>
             </View>
           </View>
 
@@ -200,11 +228,6 @@ export const LoginScreen = ({ onLoginSuccess }: LoginScreenProps) => {
                 onChange={setKeepMeSignedIn}
                 label="Keep me signed in"
               />
-
-              {/* Forgot Password Link */}
-              <TouchableOpacity activeOpacity={0.7} disabled={isLoading}>
-                <Text style={styles.forgotPassword}>Forgot password?</Text>
-              </TouchableOpacity>
             </View>
 
             {/* Sign In Button */}

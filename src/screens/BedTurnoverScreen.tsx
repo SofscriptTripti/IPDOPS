@@ -9,6 +9,8 @@ import {
   Platform,
   Alert,
   StatusBar,
+  KeyboardAvoidingView,
+  Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { THEME } from '../constants/theme';
@@ -54,7 +56,7 @@ export const BedTurnoverScreen = ({ sessionData, onBack }: BedTurnoverScreenProp
       floorInfo: 'DOUBLE OCC.-3RD FLR.',
       wardType: 'DOUBLE OCC (N)',
       origin: 'DISCHARGE',
-      intimationNo: '23233',
+      intimationNo: '',
       genderType: 'ALL',
       pendingText: 'Pending 1 Day 0 hours',
       status: 'UNCLEANED',
@@ -105,6 +107,28 @@ export const BedTurnoverScreen = ({ sessionData, onBack }: BedTurnoverScreenProp
   // Selected bed IDs for bulk actions
   const [selectedBedIds, setSelectedBedIds] = useState<Record<string, boolean>>({});
 
+  // Custom Alert State
+  const [alertConfig, setAlertConfig] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    type: 'success' | 'warning' | 'info';
+  }>({
+    visible: false,
+    title: '',
+    message: '',
+    type: 'info',
+  });
+
+  const showCustomAlert = (title: string, message: string, type: 'success' | 'warning' | 'info' = 'info') => {
+    setAlertConfig({
+      visible: true,
+      title,
+      message,
+      type,
+    });
+  };
+
   // Filter list
   const pendingBeds = beds.filter(b => b.status === 'UNCLEANED');
   const cleanedBeds = beds.filter(b => b.status === 'CLEANED');
@@ -143,7 +167,7 @@ export const BedTurnoverScreen = ({ sessionData, onBack }: BedTurnoverScreenProp
   const handleMarkCleanedBulk = () => {
     const selectedIds = Object.keys(selectedBedIds).filter(id => selectedBedIds[id]);
     if (selectedIds.length === 0) {
-      Alert.alert('Housekeeping', 'Please select at least one bed to mark as cleaned.');
+      showCustomAlert('Housekeeping', 'Please select at least one bed to mark as cleaned.', 'warning');
       return;
     }
 
@@ -159,7 +183,7 @@ export const BedTurnoverScreen = ({ sessionData, onBack }: BedTurnoverScreenProp
     }));
 
     setSelectedBedIds({});
-    Alert.alert('Success', `${selectedIds.length} bed(s) successfully marked as cleaned!`);
+    showCustomAlert('Success', `${selectedIds.length} bed(s) successfully marked as cleaned!`, 'success');
   };
 
   const handleMarkCleanedSingle = (id: string) => {
@@ -178,7 +202,7 @@ export const BedTurnoverScreen = ({ sessionData, onBack }: BedTurnoverScreenProp
     delete updated[id];
     setSelectedBedIds(updated);
 
-    Alert.alert('Success', 'Bed successfully marked as cleaned!');
+    showCustomAlert('Success', 'Bed successfully marked as cleaned!', 'success');
   };
 
   const handleUpdateIntimation = (id: string, value: string) => {
@@ -188,6 +212,17 @@ export const BedTurnoverScreen = ({ sessionData, onBack }: BedTurnoverScreenProp
       }
       return b;
     }));
+
+    // Auto mark/unmark checkbox based on value being non-empty
+    setSelectedBedIds(prev => {
+      const updated = { ...prev };
+      if (value.trim() !== '') {
+        updated[id] = true;
+      } else {
+        delete updated[id];
+      }
+      return updated;
+    });
   };
 
   const countSelected = Object.keys(selectedBedIds).filter(id => selectedBedIds[id]).length;
@@ -195,6 +230,11 @@ export const BedTurnoverScreen = ({ sessionData, onBack }: BedTurnoverScreenProp
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <StatusBar barStyle="light-content" backgroundColor={THEME.colors.primary} translucent />
+
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
+      >
 
       {/* Header bar */}
       <View style={styles.header}>
@@ -215,9 +255,6 @@ export const BedTurnoverScreen = ({ sessionData, onBack }: BedTurnoverScreenProp
             <Text style={styles.liveText}>Live</Text>
           </View>
         </View>
-        <Text style={styles.hospitalInfo}>
-          {sessionData.companyName || 'SOFSCRIPT'} - {sessionData.locationName || 'Mumbai'}
-        </Text>
       </View>
 
       {/* Main Content */}
@@ -465,7 +502,39 @@ export const BedTurnoverScreen = ({ sessionData, onBack }: BedTurnoverScreenProp
         >
           <Text style={styles.exitBtnText}>Exit</Text>
         </TouchableOpacity>
+      {/* Custom Themed Alert Modal */}
+      <Modal
+        visible={alertConfig.visible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setAlertConfig(prev => ({ ...prev, visible: false }))}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={[
+              styles.modalIconCircle,
+              alertConfig.type === 'success' && styles.bgSuccess,
+              alertConfig.type === 'warning' && styles.bgWarning,
+              alertConfig.type === 'info' && styles.bgInfo
+            ]}>
+              <Text style={styles.modalIcon}>
+                {alertConfig.type === 'success' ? '✓' : alertConfig.type === 'warning' ? '⚠' : 'ℹ'}
+              </Text>
+            </View>
+            <Text style={styles.modalTitle}>{alertConfig.title}</Text>
+            <Text style={styles.modalText}>{alertConfig.message}</Text>
+            <TouchableOpacity
+              activeOpacity={0.8}
+              style={styles.modalCloseBtn}
+              onPress={() => setAlertConfig(prev => ({ ...prev, visible: false }))}
+            >
+              <Text style={styles.modalCloseBtnText}>OK</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
       </View>
+      </KeyboardAvoidingView>
     </View>
   );
 };
@@ -936,6 +1005,74 @@ const styles = StyleSheet.create({
   },
   exitBtnText: {
     color: '#475569',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalContent: {
+    width: '100%',
+    maxWidth: 320,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    elevation: 6,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
+  },
+  modalIconCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  bgSuccess: {
+    backgroundColor: '#dcfce7',
+  },
+  bgWarning: {
+    backgroundColor: '#fef9c3',
+  },
+  bgInfo: {
+    backgroundColor: '#e0f2fe',
+  },
+  modalIcon: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#1e293b',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1e293b',
+    marginBottom: 8,
+  },
+  modalText: {
+    fontSize: 14,
+    color: '#64748b',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+  modalCloseBtn: {
+    backgroundColor: THEME.colors.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 36,
+    borderRadius: 10,
+    width: '100%',
+    alignItems: 'center',
+  },
+  modalCloseBtnText: {
+    color: '#ffffff',
     fontSize: 14,
     fontWeight: '700',
   },

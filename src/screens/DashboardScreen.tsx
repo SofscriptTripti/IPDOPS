@@ -39,6 +39,7 @@ interface DashboardScreenProps {
   onLogout: () => void;
   onNavigateToBedTurnover: () => void;
   onNavigateToTimeline: (patient: PatientSessionDetails) => void;
+  onNavigateToNotifications: () => void;
 }
 
 const mockPatients: PatientSessionDetails[] = [
@@ -320,7 +321,7 @@ const PulsingDot = () => {
   );
 };
 
-export const DashboardScreen = ({ sessionData, onLogout, onNavigateToBedTurnover, onNavigateToTimeline }: DashboardScreenProps) => {
+export const DashboardScreen = ({ sessionData, onLogout, onNavigateToBedTurnover, onNavigateToTimeline, onNavigateToNotifications }: DashboardScreenProps) => {
   const insets = useSafeAreaInsets();
   
   const [searchQuery, setSearchQuery] = useState('');
@@ -332,6 +333,7 @@ export const DashboardScreen = ({ sessionData, onLogout, onNavigateToBedTurnover
   const [endDate, setEndDate] = useState<number | null>(5);
   const [tempStart, setTempStart] = useState<number | null>(3);
   const [tempEnd, setTempEnd] = useState<number | null>(5);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   // Sync temp dates to confirmed dates when calendar opens
   useEffect(() => {
@@ -375,29 +377,7 @@ export const DashboardScreen = ({ sessionData, onLogout, onNavigateToBedTurnover
   };
 
   const handleLogout = () => {
-    Alert.alert(
-      'Sign Out',
-      'Are you sure you want to sign out?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Sign Out', 
-          style: 'destructive',
-          onPress: async () => {
-            setIsLoggingOut(true);
-            try {
-              // Call API logout with token, userId, and sessionId
-              await authService.logout(sessionData.token, sessionData.userId, sessionData.sessionId);
-            } catch (err) {
-              console.warn('API logout request failed:', err);
-            } finally {
-              setIsLoggingOut(false);
-              onLogout(); // Clear local state redirect to Login regardless of API success
-            }
-          }
-        }
-      ]
-    );
+    setShowLogoutModal(true);
   };
 
   // Filter patients based on tab choice, search input, and calendar date range
@@ -437,7 +417,7 @@ export const DashboardScreen = ({ sessionData, onLogout, onNavigateToBedTurnover
             <Image
               source={require('../../assets/bethany_logo.png')}
               style={styles.dashboardLogo as any}
-              resizeMode="contain"
+              resizeMode="cover"
             />
           </View>
           <View>
@@ -445,7 +425,7 @@ export const DashboardScreen = ({ sessionData, onLogout, onNavigateToBedTurnover
               {sessionData.divisionName || 'BETHANY HOSPITAL'}
             </Text>
             <Text style={styles.dashboardTitleText} numberOfLines={1}>
-              IPD Ops  •  <Text style={styles.locationSubtitleText}>{sessionData.locationName || 'Mumbai'}</Text>
+              CAREWORKS One  •  <Text style={styles.locationSubtitleText}>{sessionData.locationName || 'Mumbai'}</Text>
             </Text>
           </View>
         </View>
@@ -456,7 +436,11 @@ export const DashboardScreen = ({ sessionData, onLogout, onNavigateToBedTurnover
           ) : (
             <>
               {/* Notification Bell */}
-              <TouchableOpacity activeOpacity={0.7} style={styles.headerIconBtn}>
+              <TouchableOpacity 
+                activeOpacity={0.7} 
+                style={styles.headerIconBtn}
+                onPress={onNavigateToNotifications}
+              >
                 <BellIcon color="#ffffff" />
                 <View style={styles.notificationDot} />
               </TouchableOpacity>
@@ -841,6 +825,53 @@ export const DashboardScreen = ({ sessionData, onLogout, onNavigateToBedTurnover
           </View>
         </View>
       </Modal>
+      
+      {/* Custom Themed Logout Confirmation Modal */}
+      <Modal
+        visible={showLogoutModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowLogoutModal(false)}
+      >
+        <View style={styles.logoutModalOverlay}>
+          <View style={styles.logoutModalContent}>
+            <View style={styles.logoutModalIconCircle}>
+              <Text style={styles.logoutModalIcon}>🚪</Text>
+            </View>
+            <Text style={styles.logoutModalTitle}>Sign Out</Text>
+            <Text style={styles.logoutModalText}>Are you sure you want to sign out?</Text>
+            
+            <View style={styles.logoutModalButtonsRow}>
+              <TouchableOpacity
+                activeOpacity={0.7}
+                style={[styles.logoutModalBtn, styles.logoutModalBtnCancel]}
+                onPress={() => setShowLogoutModal(false)}
+              >
+                <Text style={styles.logoutModalBtnCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                activeOpacity={0.8}
+                style={[styles.logoutModalBtn, styles.logoutModalBtnConfirm]}
+                onPress={async () => {
+                  setShowLogoutModal(false);
+                  setIsLoggingOut(true);
+                  try {
+                    await authService.logout(sessionData.token, sessionData.userId, sessionData.sessionId);
+                  } catch (err) {
+                    console.warn('API logout request failed:', err);
+                  } finally {
+                    setIsLoggingOut(false);
+                    onLogout();
+                  }
+                }}
+              >
+                <Text style={styles.logoutModalBtnConfirmText}>Sign Out</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -875,8 +906,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   dashboardLogo: {
-    width: '75%',
-    height: '75%',
+    width: '100%',
+    height: '100%',
   },
   dashboardHospitalText: {
     fontSize: 12.5,
@@ -1465,5 +1496,81 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontWeight: '800',
     fontSize: 12.5,
+  },
+  logoutModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  logoutModalContent: {
+    width: '100%',
+    maxWidth: 320,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    elevation: 6,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
+  },
+  logoutModalIconCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#fee2e2',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  logoutModalIcon: {
+    fontSize: 26,
+  },
+  logoutModalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: THEME.colors.textDark,
+    marginBottom: 8,
+  },
+  logoutModalText: {
+    fontSize: 14,
+    color: THEME.colors.textLight,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+  logoutModalButtonsRow: {
+    flexDirection: 'row',
+    width: '100%',
+    justifyContent: 'space-between',
+  },
+  logoutModalBtn: {
+    flex: 1,
+    height: 44,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  logoutModalBtnCancel: {
+    borderWidth: 1.5,
+    borderColor: '#cbd5e1',
+    marginRight: 8,
+  },
+  logoutModalBtnCancelText: {
+    color: THEME.colors.textMedium,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  logoutModalBtnConfirm: {
+    backgroundColor: THEME.colors.danger,
+    marginLeft: 8,
+  },
+  logoutModalBtnConfirmText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '700',
   },
 });

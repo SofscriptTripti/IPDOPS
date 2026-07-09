@@ -1,17 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, BackHandler } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { LoginScreen } from './src/screens/LoginScreen';
 import { DashboardScreen } from './src/screens/DashboardScreen';
 import { BedTurnoverScreen } from './src/screens/BedTurnoverScreen';
 import { PatientTimelineScreen, PatientSessionDetails } from './src/screens/PatientTimelineScreen';
+import { NotificationScreen } from './src/screens/NotificationScreen';
 import { authService, UserSessionData } from './src/services/authService';
 import { THEME } from './src/constants/theme';
 
 export default function App() {
   const [isSignedIn, setIsSignedIn] = useState(false);
   const [sessionData, setSessionData] = useState<UserSessionData | null>(null);
-  const [currentScreen, setCurrentScreen] = useState<'Login' | 'Dashboard' | 'BedTurnover' | 'PatientTimeline'>('Login');
+  const [currentScreen, setCurrentScreen] = useState<'Login' | 'Dashboard' | 'BedTurnover' | 'PatientTimeline' | 'Notifications'>('Login');
   const [selectedPatient, setSelectedPatient] = useState<PatientSessionDetails | null>(null);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
 
@@ -33,6 +34,23 @@ export default function App() {
     };
     loadStoredSession();
   }, []);
+
+  // Intercept Android hardware back button press to avoid crashing/exiting
+  useEffect(() => {
+    const handleHardwareBackPress = () => {
+      if (currentScreen === 'Dashboard' || currentScreen === 'Login') {
+        return false; // Exit app normally on home/login screen
+      }
+      setCurrentScreen('Dashboard');
+      return true; // Intercepted back press successfully
+    };
+
+    const subscription = BackHandler.addEventListener('hardwareBackPress', handleHardwareBackPress);
+
+    return () => {
+      subscription.remove();
+    };
+  }, [currentScreen]);
 
   const handleLoginSuccess = async (data: UserSessionData) => {
     await authService.saveSession(data);
@@ -62,6 +80,10 @@ export default function App() {
     setCurrentScreen('Dashboard');
   };
 
+  const handleNavigateToNotifications = () => {
+    setCurrentScreen('Notifications');
+  };
+
   // Fullscreen loading spinner while restoring session
   if (isInitialLoading) {
     return (
@@ -79,12 +101,15 @@ export default function App() {
         <BedTurnoverScreen sessionData={sessionData} onBack={handleBackToDashboard} />
       ) : currentScreen === 'PatientTimeline' && selectedPatient ? (
         <PatientTimelineScreen patient={selectedPatient} onBack={handleBackToDashboard} />
+      ) : currentScreen === 'Notifications' ? (
+        <NotificationScreen onBack={handleBackToDashboard} />
       ) : (
         <DashboardScreen
           sessionData={sessionData}
           onLogout={handleLogout}
           onNavigateToBedTurnover={handleNavigateToBedTurnover}
           onNavigateToTimeline={handleNavigateToTimeline}
+          onNavigateToNotifications={handleNavigateToNotifications}
         />
       )}
     </SafeAreaProvider>

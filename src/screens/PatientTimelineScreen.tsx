@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   StyleSheet,
   Text,
@@ -8,6 +8,7 @@ import {
   Platform,
   Alert,
   StatusBar,
+  Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { THEME } from '../constants/theme';
@@ -48,14 +49,7 @@ interface PatientTimelineScreenProps {
 
 export const PatientTimelineScreen = ({ patient, onBack }: PatientTimelineScreenProps) => {
   const insets = useSafeAreaInsets();
-
-  const handleCallDoctor = () => {
-    Alert.alert('Phone Service', `Initiating call to ${patient.doctor}...`);
-  };
-
-  const handleSendReminder = () => {
-    Alert.alert('SMS Service', `Reminder notification successfully sent for patient ${patient.name}.`);
-  };
+  const [isChatModalVisible, setIsChatModalVisible] = useState(false);
 
   // Map status colors for TAT overall badge
   const isOutOfTAT = patient.statusDetail === 'Out of TAT' || patient.statusDetail === 'Delayed';
@@ -83,9 +77,7 @@ export const PatientTimelineScreen = ({ patient, onBack }: PatientTimelineScreen
           <Text style={styles.headerSubtitle}>PATIENT</Text>
           <Text style={styles.headerTitle}>Discharge Timeline</Text>
         </View>
-        <TouchableOpacity activeOpacity={0.7} style={styles.menuBtn}>
-          <Text style={styles.menuText}>⋮</Text>
-        </TouchableOpacity>
+        <View style={{ width: 36 }} />
       </View>
 
       {/* Main Content Layout (Flex Row / Grid on Desktop, simple scroll stack on Mobile) */}
@@ -195,22 +187,39 @@ export const PatientTimelineScreen = ({ patient, onBack }: PatientTimelineScreen
 
       {/* Sticky Bottom Actions Bar */}
       <View style={[styles.bottomActionBar, { paddingBottom: insets.bottom + 12 }]}>
-        <TouchableOpacity
-          activeOpacity={0.8}
-          style={styles.callDoctorBtn}
-          onPress={handleCallDoctor}
-        >
-          <Text style={styles.callDoctorBtnText}>📞 Call Doctor</Text>
-        </TouchableOpacity>
-
         <TouchableOpacity 
-          activeOpacity={0.7} 
-          style={styles.reminderBtn}
-          onPress={handleSendReminder}
+          activeOpacity={0.8} 
+          style={styles.chatBtn}
+          onPress={() => setIsChatModalVisible(true)}
         >
-          <Text style={styles.reminderBtnText}>💬 Send Reminder</Text>
+          <Text style={styles.chatBtnText}>💬 Communication chat box</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Communication Chat Under Implementation Modal */}
+      <Modal
+        visible={isChatModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setIsChatModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalIconContainer}>
+              <Text style={styles.modalIcon}>💬</Text>
+            </View>
+            <Text style={styles.modalTitle}>Communication Chat</Text>
+            <Text style={styles.modalText}>This feature is currently under implementation.</Text>
+            <TouchableOpacity
+              activeOpacity={0.8}
+              style={styles.modalCloseBtn}
+              onPress={() => setIsChatModalVisible(false)}
+            >
+              <Text style={styles.modalCloseBtnText}>OK</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -516,31 +525,74 @@ const styles = StyleSheet.create({
       },
     }),
   },
-  callDoctorBtn: {
-    flex: 1.2,
-    marginRight: 12,
+  chatBtn: {
+    flex: 1,
     backgroundColor: THEME.colors.primary,
     height: 46,
     borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  callDoctorBtnText: {
+  chatBtnText: {
     color: '#ffffff',
     fontSize: 14,
     fontWeight: '700',
   },
-  reminderBtn: {
+  modalOverlay: {
     flex: 1,
-    borderWidth: 1.5,
-    borderColor: '#cbd5e1',
-    height: 46,
-    borderRadius: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 24,
   },
-  reminderBtnText: {
-    color: '#475569',
+  modalContent: {
+    width: '100%',
+    maxWidth: 320,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    elevation: 5,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
+  },
+  modalIconContainer: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#ecfdf5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalIcon: {
+    fontSize: 28,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1e293b',
+    marginBottom: 8,
+  },
+  modalText: {
+    fontSize: 14,
+    color: '#64748b',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+  modalCloseBtn: {
+    backgroundColor: THEME.colors.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 36,
+    borderRadius: 10,
+    width: '100%',
+    alignItems: 'center',
+  },
+  modalCloseBtnText: {
+    color: '#ffffff',
     fontSize: 14,
     fontWeight: '700',
   },
