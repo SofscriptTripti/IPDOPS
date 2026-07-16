@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   StyleSheet,
   Text,
@@ -13,6 +13,7 @@ import {
   Alert,
   Platform,
   Modal,
+  RefreshControl,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { THEME } from '../constants/theme';
@@ -34,15 +35,21 @@ import { SegmentedProgressBar } from '../components/SegmentedBar';
 import { authService, UserSessionData } from '../services/authService';
 import { PatientSessionDetails } from './PatientTimelineScreen';
 
+      import { SubModuleItem } from './SubModuleSelectionScreen';
+import { LoadingIndicator } from '../components/LoadingIndicator';
+import { trackerService } from '../services/trackerService';
+
 interface DashboardScreenProps {
   sessionData: UserSessionData;
+  selectedSubModule: SubModuleItem | null;
   onLogout: () => void;
   onNavigateToBedTurnover: () => void;
   onNavigateToTimeline: (patient: PatientSessionDetails) => void;
   onNavigateToNotifications: () => void;
 }
 
-const mockPatients: PatientSessionDetails[] = [
+const mockPatients: PatientSessionDetails[] = [];
+const dummyPatients = [
   {
     id: '1',
     name: 'MR. KRISHNA DAS PAL',
@@ -321,7 +328,14 @@ const PulsingDot = () => {
   );
 };
 
-export const DashboardScreen = ({ sessionData, onLogout, onNavigateToBedTurnover, onNavigateToTimeline, onNavigateToNotifications }: DashboardScreenProps) => {
+export const DashboardScreen = ({
+  sessionData,
+  selectedSubModule,
+  onLogout,
+  onNavigateToBedTurnover,
+  onNavigateToTimeline,
+  onNavigateToNotifications,
+}: DashboardScreenProps) => {
   const insets = useSafeAreaInsets();
   
   const [searchQuery, setSearchQuery] = useState('');
@@ -329,11 +343,188 @@ export const DashboardScreen = ({ sessionData, onLogout, onNavigateToBedTurnover
   const [activeBottomTab, setActiveBottomTab] = useState<'Dashboard' | 'Patients' | 'Reports' | 'Profile'>('Dashboard');
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
-  const [startDate, setStartDate] = useState<number | null>(3);
-  const [endDate, setEndDate] = useState<number | null>(5);
-  const [tempStart, setTempStart] = useState<number | null>(3);
-  const [tempEnd, setTempEnd] = useState<number | null>(5);
+  const [startDate, setStartDate] = useState<number | null>(new Date().getDate() || 15);
+  const [endDate, setEndDate] = useState<number | null>(new Date().getDate() || 15);
+  const [tempStart, setTempStart] = useState<number | null>(new Date().getDate() || 15);
+  const [tempEnd, setTempEnd] = useState<number | null>(new Date().getDate() || 15);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [livePatients, setLivePatients] = useState<PatientSessionDetails[] | null>(null);
+  const [liveCounts, setLiveCounts] = useState<{ totAdmitted: number; totDischarged: number; totOutOfTat: number; pendingBeds: number } | null>(null);
+  const [isFetchingTracker, setIsFetchingTracker] = useState(false);
+
+  // Ward Filter States
+  const [wards, setWards] = useState<{ Cd: number; Dcd: string | null }[]>([]);
+  const [selectedWard, setSelectedWard] = useState<{ Cd: number; Dcd: string | null } | null>(null);
+  const [showWardModal, setShowWardModal] = useState(false);
+  const [wardSearchQuery, setWardSearchQuery] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchWards = useCallback(async () => {
+    try {
+      console.log('Fetching live ward list for dashboard...');
+      const res = await trackerService.getWardList(
+        sessionData.token,
+        "1",
+        1,
+        1,
+        sessionData.userId
+      );
+      if (res && res.success && Array.isArray(res.data)) {
+        // Filter out null or empty descriptions
+        const validWards = res.data.filter((w: any) => w.Dcd && w.Dcd.trim().length > 0);
+        console.log('Successfully loaded wards:', validWards.length);
+        setWards(validWards);
+      }
+    } catch (err) {
+      console.warn('Failed to load wards:', err);
+    }
+  }, [sessionData]);
+
+  const fetchDashboardData = useCallback(async (isSwipeRefresh: boolean = false) => {
+    if (!startDate) return;
+    if (!isSwipeRefresh) {
+      setLivePatients(null);
+      setIsFetchingTracker(true);
+    }
+    try {
+      const fromDateStr = `2026-07-${String(startDate).padStart(2, '0')}`;
+      const toDateStr = `2026-07-${String(endDate || startDate).padStart(2, '0')}`;
+      const wrdCdParam = selectedWard ? String(selectedWard.Cd) : '';
+      
+      console.log(`Fetching dashboard data for date range: ${fromDateStr} to ${toDateStr}, ward: ${wrdCdParam}`);
+      const response = await trackerService.getDashboard(
+        sessionData.token,
+        fromDateStr,
+        toDateStr,
+        0,
+        wrdCdParam,
+        sessionData.userId
+      );
+
+      if (response && response.success && response.data) {
+        const summary = response.data.summary || {};
+        setLiveCounts({
+          totAdmitted: summary.admitted ?? 0,
+          totDischarged: summary.discharged ?? 0,
+          totOutOfTat: summary.outOfTat ?? 0,
+          pendingBeds: summary.pendingBeds ?? 0,
+        });
+
+        const patientsList = Array.isArray(response.data.patients) ? response.data.patients : [];
+        const mappedList = patientsList.map((p: any, idx: number) => {
+          const colorString = p.StageColors || "0,0,0,0,0,0,0,0,0,0,0,0,0";
+          const colorCodes = colorString.split(',');
+
+          const stageNames = [
+            'Discharge Advice',
+            'Last Issue Request (Nurse Station)',
+            'Last Issue by Pharmacy',
+            'Last Issue Return Request (Nurse)',
+            'Last Issue Return by Pharmacy',
+            'Visitsheet / Voucher to Billing',
+            'Discharge Summary (Provisional)',
+            'Discharge Summary (Final)',
+            'Discharge Bill Preparation',
+            'Discharge Bill Approval',
+            'Bill Handed to Patient/Sponsor',
+            'Discharge Voucher Verification',
+            'Patient Discharge / Bed Vacated'
+          ];
+
+          const formattedStages = stageNames.map((name, sIdx) => {
+            const colorCode = colorCodes[sIdx] || '0';
+            let status: 'green' | 'orange' | 'red' | 'white' = 'white';
+            if (colorCode === '1') status = 'green';
+            else if (colorCode === '2') status = 'orange';
+            else if (colorCode === '3') status = 'red';
+
+            let stageTime = '';
+            if (sIdx === 0) stageTime = p.DschgAdvGivenTm ? p.DschgAdvGivenTm.substring(11, 16) : '';
+            else if (sIdx === 12) stageTime = p.ActDschgDtTm ? p.ActDschgDtTm.substring(11, 16) : '';
+
+            return {
+              code: `T${sIdx + 1}`,
+              name,
+              time: stageTime,
+              diffText: '',
+              status,
+              tatLimit: '',
+            };
+          });
+
+          const status = p.DschgStatus || 'Admitted';
+
+          let statusDetail = 'On track';
+          if (p.OverallRisk === 2) {
+            statusDetail = 'Delayed';
+          } else if (p.OverallRisk === 1) {
+            statusDetail = 'At risk';
+          }
+
+          let dateRangeText = 'T1 - Advice Pending';
+          if (p.DschgAdvGivenTm) {
+            const month = p.DschgAdvGivenTm.substring(5, 7);
+            const day = p.DschgAdvGivenTm.substring(8, 10);
+            const hourMin = p.DschgAdvGivenTm.substring(11, 16);
+            dateRangeText = `T1 - ${day}/${month} ${hourMin}`;
+          }
+
+          return {
+            id: p.IPNo ? String(p.IPNo) : String(idx),
+            name: p.PatientName || 'PATIENT',
+            ipNo: p.IPNo ? `IP ${p.IPNo}` : '',
+            bed: p.BedNo ? `Bed ${p.BedNo}` : '',
+            ward: p.Ward || 'WARD',
+            speciality: p.Speciality || 'MEDICINE',
+            doctor: p.DoctorName || p.Doctor || 'DR. CLINICIAN',
+            stageProgress: p.StagesDone ?? 0,
+            totalStages: p.StagesTotal ?? 13,
+            dateRange: dateRangeText,
+            status,
+            statusDetail,
+            paymentBy: p.PtnPayTyp || 'CASH',
+            patientType: p.PatientType || 'SELF PAYING',
+            stages: formattedStages,
+          } as PatientSessionDetails;
+        });
+
+        setLivePatients(mappedList);
+      } else {
+        setLivePatients([]);
+        setLiveCounts(null);
+      }
+    } catch (err) {
+      console.warn('Failed to fetch dashboard tracker data:', err);
+      setLivePatients([]);
+      setLiveCounts(null);
+    } finally {
+      setIsFetchingTracker(false);
+    }
+  }, [startDate, endDate, sessionData, selectedWard]);
+
+  // Fetch ward list on mount
+  useEffect(() => {
+    fetchWards();
+  }, [fetchWards]);
+
+  // Fetch dashboard data when dependencies change
+  useEffect(() => {
+    fetchDashboardData();
+  }, [fetchDashboardData, startDate, endDate, selectedWard, sessionData]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        fetchWards(),
+        fetchDashboardData(true)
+      ]);
+    } catch (err) {
+      console.warn('Failed to refresh dashboard data:', err);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [fetchWards, fetchDashboardData]);
 
   // Sync temp dates to confirmed dates when calendar opens
   useEffect(() => {
@@ -380,8 +571,10 @@ export const DashboardScreen = ({ sessionData, onLogout, onNavigateToBedTurnover
     setShowLogoutModal(true);
   };
 
+  const patientsDataset = livePatients || [];
+
   // Filter patients based on tab choice, search input, and calendar date range
-  const filteredPatients = mockPatients.filter((patient) => {
+  const filteredPatients = patientsDataset.filter((patient) => {
     const matchesTab = selectedTab === 'All' || patient.status === selectedTab;
     const matchesSearch =
       patient.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -392,7 +585,7 @@ export const DashboardScreen = ({ sessionData, onLogout, onNavigateToBedTurnover
       
     let matchesDate = true;
     const pDate = getPatientDate(patient.dateRange);
-    if (pDate && pDate.month === 5) { // All mock data is in May
+    if (pDate && pDate.month === 7) {
       if (startDate !== null && pDate.day < startDate) matchesDate = false;
       if (endDate !== null && pDate.day > endDate) matchesDate = false;
     }
@@ -400,11 +593,11 @@ export const DashboardScreen = ({ sessionData, onLogout, onNavigateToBedTurnover
     return matchesTab && matchesSearch && matchesDate;
   });
 
-  // Calculate status counts
-  const totalCount = mockPatients.length;
-  const admittedCount = mockPatients.filter((p) => p.status === 'Admitted').length;
-  const dischargedCount = mockPatients.filter((p) => p.status === 'Discharged').length;
-  const outOfTatCount = mockPatients.filter((p) => p.status === 'Out of TAT').length;
+  // Calculate status counts (fallback to '--' when live API data has not loaded)
+  const totalCount = liveCounts ? ((liveCounts.totAdmitted || 0) + (liveCounts.totDischarged || 0) + (liveCounts.totOutOfTat || 0)) : '--';
+  const admittedCount = liveCounts?.totAdmitted !== undefined ? liveCounts.totAdmitted : '--';
+  const dischargedCount = liveCounts?.totDischarged !== undefined ? liveCounts.totDischarged : '--';
+  const outOfTatCount = liveCounts?.totOutOfTat !== undefined ? liveCounts.totOutOfTat : '--';
 
   return (
     <View style={[styles.dashboardContainer, { paddingTop: insets.top }]}>
@@ -415,17 +608,17 @@ export const DashboardScreen = ({ sessionData, onLogout, onNavigateToBedTurnover
         <View style={styles.dashboardHeaderLeft}>
           <View style={styles.dashboardLogoOuter}>
             <Image
-              source={require('../../assets/bethany_logo.png')}
+              source={require('../../assets/careworksone_logo.png')}
               style={styles.dashboardLogo as any}
               resizeMode="cover"
             />
           </View>
           <View>
             <Text style={styles.dashboardHospitalText} numberOfLines={1}>
-              {sessionData.divisionName || 'BETHANY HOSPITAL'}
+              IPD Ops{selectedSubModule ? `  •  ${selectedSubModule.SubModName}` : ''}
             </Text>
             <Text style={styles.dashboardTitleText} numberOfLines={1}>
-              CAREWORKS One  •  <Text style={styles.locationSubtitleText}>{sessionData.locationName || 'Mumbai'}</Text>
+              {sessionData.companyName || 'SOFSCRIPT HOSPITAL MUMBAI'}
             </Text>
           </View>
         </View>
@@ -435,7 +628,7 @@ export const DashboardScreen = ({ sessionData, onLogout, onNavigateToBedTurnover
             <ActivityIndicator color="#ffffff" size="small" style={{ marginRight: 10 }} />
           ) : (
             <>
-              {/* Notification Bell */}
+              {/* Notification Bell
               <TouchableOpacity 
                 activeOpacity={0.7} 
                 style={styles.headerIconBtn}
@@ -444,8 +637,9 @@ export const DashboardScreen = ({ sessionData, onLogout, onNavigateToBedTurnover
                 <BellIcon color="#ffffff" />
                 <View style={styles.notificationDot} />
               </TouchableOpacity>
+              */}
               
-              {/* Logout Button Icon */}
+              {/* Profile Logout Icon Badge */}
               <TouchableOpacity 
                 activeOpacity={0.7} 
                 style={styles.profileBadge}
@@ -458,15 +652,22 @@ export const DashboardScreen = ({ sessionData, onLogout, onNavigateToBedTurnover
         </View>
       </View>
 
-      {/* Scrollable Content */}
       <ScrollView 
         style={styles.dashboardScroll}
-        contentContainerStyle={styles.dashboardContent}
+        contentContainerStyle={[styles.dashboardContent, { flexGrow: 1 }]}
         showsVerticalScrollIndicator={false}
         bounces={true}
+        alwaysBounceVertical={true}
         keyboardShouldPersistTaps="handled"
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[THEME.colors.primary]}
+            tintColor={THEME.colors.primary}
+          />
+        }
       >
-        {/* Top Metrics Cards Row (4 Columns in a Single Line) */}
         <View style={styles.metricsRow}>
           {/* Metric Card 1: Total */}
           <TouchableOpacity 
@@ -566,7 +767,9 @@ export const DashboardScreen = ({ sessionData, onLogout, onNavigateToBedTurnover
           </View>
           <View style={styles.bedBannerRight}>
             <View style={styles.bedBadge}>
-              <Text style={styles.bedBadgeText}>3</Text>
+              <Text style={styles.bedBadgeText}>
+                {liveCounts?.pendingBeds !== undefined ? liveCounts.pendingBeds : 0}
+              </Text>
             </View>
             <Text style={styles.chevron}>›</Text>
           </View>
@@ -576,6 +779,7 @@ export const DashboardScreen = ({ sessionData, onLogout, onNavigateToBedTurnover
         <ScrollView 
           horizontal 
           showsHorizontalScrollIndicator={false}
+          style={styles.tabsScroll}
           contentContainerStyle={styles.tabsScrollContainer}
         >
           <TouchableOpacity 
@@ -609,6 +813,19 @@ export const DashboardScreen = ({ sessionData, onLogout, onNavigateToBedTurnover
           >
             <Text style={[styles.tabBtnText, selectedTab === 'Out of TAT' && styles.tabBtnTextActive]}>Out of TAT {outOfTatCount}</Text>
           </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={styles.tabBtn}
+            onPress={() => {
+              setWardSearchQuery('');
+              setShowWardModal(true);
+            }}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.tabBtnText}>
+              Wards ▾
+            </Text>
+          </TouchableOpacity>
         </ScrollView>
 
         {/* Search Bar & Date Picker Row */}
@@ -633,9 +850,9 @@ export const DashboardScreen = ({ sessionData, onLogout, onNavigateToBedTurnover
             <CalendarIcon color={THEME.colors.textMedium} />
             <Text style={styles.datePickerText}>
               {startDate && endDate 
-                ? `May ${String(startDate).padStart(2, '0')}–${String(endDate).padStart(2, '0')}` 
+                ? `July ${String(startDate).padStart(2, '0')}–${String(endDate).padStart(2, '0')}` 
                 : startDate 
-                ? `May ${String(startDate).padStart(2, '0')}` 
+                ? `July ${String(startDate).padStart(2, '0')}` 
                 : 'Select dates'}
             </Text>
           </TouchableOpacity>
@@ -646,12 +863,16 @@ export const DashboardScreen = ({ sessionData, onLogout, onNavigateToBedTurnover
           <Text style={styles.patientsCount}>{filteredPatients.length} patients</Text>
           <View style={styles.liveIndicatorContainer}>
             <PulsingDot />
-            <Text style={styles.liveText}>Live - refreshes every 10 min</Text>
+            <Text style={styles.liveText}>Live</Text>
           </View>
         </View>
 
         {/* Patients list */}
-        {filteredPatients.length === 0 ? (
+        {isFetchingTracker ? (
+          <View style={{ paddingVertical: 40, justifyContent: 'center', alignItems: 'center', width: '100%' }}>
+            <LoadingIndicator message="Loading Dashboard." />
+          </View>
+        ) : filteredPatients.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyText}>No patients match your search/filter criteria</Text>
           </View>
@@ -664,7 +885,7 @@ export const DashboardScreen = ({ sessionData, onLogout, onNavigateToBedTurnover
             const badgeBg = patient.status === 'Discharged' ? THEME.colors.successBg : '#e0f2fe';
             const badgeText = patient.status === 'Discharged' ? THEME.colors.success : '#0369a1';
             const segmentColors = patient.stages.map(s => 
-              s.status === 'green' ? '#22c55e' : s.status === 'orange' ? '#ea580c' : '#ef4444'
+              s.status === 'green' ? '#008000' : s.status === 'orange' ? '#FFA500' : s.status === 'red' ? '#FF0000' : '#e2e8f0'
             );
 
             return (
@@ -736,7 +957,10 @@ export const DashboardScreen = ({ sessionData, onLogout, onNavigateToBedTurnover
             {/* Modal Header */}
             <View style={styles.calendarHeader}>
               <Text style={styles.calendarHeaderTitle}>Select Date Range</Text>
-              <Text style={styles.calendarHeaderSubtitle}>May 2026</Text>
+              <Text style={styles.calendarHeaderSubtitle}>
+                {tempStart ? `From July ${String(tempStart).padStart(2, '0')}` : 'Select start date'}
+                {tempEnd ? ` to July ${String(tempEnd).padStart(2, '0')}` : ''}
+              </Text>
             </View>
 
             {/* Weekdays Row */}
@@ -748,8 +972,8 @@ export const DashboardScreen = ({ sessionData, onLogout, onNavigateToBedTurnover
 
             {/* Days Grid */}
             <View style={styles.daysGrid}>
-              {/* Empty placeholder cells for offset (May 1st, 2026 is a Friday = 5 empty cells) */}
-              {Array.from({ length: 5 }).map((_, idx) => (
+              {/* Empty placeholder cells for offset (July 1st, 2026 is a Wednesday = 3 empty cells) */}
+              {Array.from({ length: 3 }).map((_, idx) => (
                 <View key={`empty-${idx}`} style={styles.emptyDayCell} />
               ))}
 
@@ -813,8 +1037,14 @@ export const DashboardScreen = ({ sessionData, onLogout, onNavigateToBedTurnover
                   activeOpacity={0.8}
                   style={styles.calendarApplyBtn}
                   onPress={() => {
-                    setStartDate(tempStart);
-                    setEndDate(tempEnd);
+                    if (tempStart === null) {
+                      const todayDay = new Date().getDate() || 15;
+                      setStartDate(todayDay);
+                      setEndDate(todayDay);
+                    } else {
+                      setStartDate(tempStart);
+                      setEndDate(tempEnd);
+                    }
                     setShowCalendar(false);
                   }}
                 >
@@ -835,10 +1065,6 @@ export const DashboardScreen = ({ sessionData, onLogout, onNavigateToBedTurnover
       >
         <View style={styles.logoutModalOverlay}>
           <View style={styles.logoutModalContent}>
-            <View style={styles.logoutModalIconCircle}>
-              <Text style={styles.logoutModalIcon}>🚪</Text>
-            </View>
-            <Text style={styles.logoutModalTitle}>Sign Out</Text>
             <Text style={styles.logoutModalText}>Are you sure you want to sign out?</Text>
             
             <View style={styles.logoutModalButtonsRow}>
@@ -872,6 +1098,104 @@ export const DashboardScreen = ({ sessionData, onLogout, onNavigateToBedTurnover
           </View>
         </View>
       </Modal>
+
+      {/* Ward Selector Modal */}
+      <Modal
+        visible={showWardModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowWardModal(false)}
+      >
+        <View style={styles.wardModalOverlay}>
+          <View style={styles.wardModalContent}>
+            <View style={styles.wardModalHeader}>
+              <Text style={styles.wardModalTitle}>Select Ward</Text>
+              <TouchableOpacity
+                onPress={() => setShowWardModal(false)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Text style={styles.wardModalCloseText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Modal Ward Search Input */}
+            <View style={styles.wardModalSearchWrapper}>
+              <SearchIcon color={THEME.colors.textMuted} />
+              <TextInput
+                style={styles.wardModalSearchInput}
+                placeholder="Search ward name..."
+                placeholderTextColor={THEME.colors.textMuted}
+                value={wardSearchQuery}
+                onChangeText={setWardSearchQuery}
+                autoCapitalize="none"
+              />
+            </View>
+
+            <ScrollView 
+              style={styles.wardModalList} 
+              showsVerticalScrollIndicator={true}
+              keyboardShouldPersistTaps="handled"
+            >
+              {/* Option for All Wards */}
+              <TouchableOpacity
+                activeOpacity={0.7}
+                style={[
+                  styles.wardModalItem,
+                  selectedWard === null && styles.wardModalItemActive
+                ]}
+                onPress={() => {
+                  setSelectedWard(null);
+                  setShowWardModal(false);
+                }}
+              >
+                <Text style={[
+                  styles.wardModalItemText,
+                  selectedWard === null && styles.wardModalItemTextActive
+                ]}>
+                  All Wards
+                </Text>
+                {selectedWard === null && (
+                  <Text style={styles.checkmarkIcon}>✓</Text>
+                )}
+              </TouchableOpacity>
+
+              {/* Filtered ward options */}
+              {wards
+                .filter(w => {
+                  if (!wardSearchQuery) return true;
+                  return w.Dcd && w.Dcd.toLowerCase().includes(wardSearchQuery.toLowerCase());
+                })
+                .map((w) => {
+                  const isSelected = selectedWard?.Cd === w.Cd;
+                  return (
+                    <TouchableOpacity
+                      key={w.Cd}
+                      activeOpacity={0.7}
+                      style={[
+                        styles.wardModalItem,
+                        isSelected && styles.wardModalItemActive
+                      ]}
+                      onPress={() => {
+                        setSelectedWard(w);
+                        setShowWardModal(false);
+                      }}
+                    >
+                      <Text style={[
+                        styles.wardModalItemText,
+                        isSelected && styles.wardModalItemTextActive
+                      ]}>
+                        {w.Dcd}
+                      </Text>
+                      {isSelected && (
+                        <Text style={styles.checkmarkIcon}>✓</Text>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -888,6 +1212,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 16,
   },
   dashboardHeaderLeft: {
     flexDirection: 'row',
@@ -914,6 +1240,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: THEME.colors.primaryLight,
     letterSpacing: 0.5,
+    paddingBottom:5,
   },
   dashboardTitleText: {
     fontSize: 20,
@@ -960,6 +1287,12 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 12.5,
     fontWeight: '700',
+  },
+  refreshingTopBar: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 24,
+    width: '100%',
   },
   dashboardScroll: {
     flex: 1,
@@ -1111,7 +1444,13 @@ const styles = StyleSheet.create({
     color: '#0284c7',
     fontWeight: '700',
   },
+  tabsScroll: {
+    height: 48,
+    flexGrow: 0,
+  },
   tabsScrollContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 16,
     paddingBottom: 14,
   },
@@ -1276,7 +1615,7 @@ const styles = StyleSheet.create({
   },
   progressRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginTop: 4,
   },
   progressValueText: {
@@ -1284,6 +1623,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: THEME.colors.textMedium,
     marginLeft: 8,
+    lineHeight: 12, // match the layout line height of the segments
   },
   patientCardFooter: {
     flexDirection: 'row',
@@ -1499,14 +1839,14 @@ const styles = StyleSheet.create({
   },
   logoutModalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(15, 23, 42, 0.45)', // Sleek dark overlay matching calendar picker
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
   },
   logoutModalContent: {
     width: '100%',
-    maxWidth: 320,
+    maxWidth: 310,
     backgroundColor: '#ffffff',
     borderRadius: 16,
     padding: 24,
@@ -1517,30 +1857,14 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 5,
   },
-  logoutModalIconCircle: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#fee2e2',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  logoutModalIcon: {
-    fontSize: 26,
-  },
-  logoutModalTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: THEME.colors.textDark,
-    marginBottom: 8,
-  },
   logoutModalText: {
-    fontSize: 14,
-    color: THEME.colors.textLight,
+    fontSize: 16.5,
+    fontWeight: '800',
+    color: THEME.colors.textDark,
     textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 20,
+    lineHeight: 23,
+    marginBottom: 24,
+    marginTop: 8,
   },
   logoutModalButtonsRow: {
     flexDirection: 'row',
@@ -1565,12 +1889,135 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   logoutModalBtnConfirm: {
-    backgroundColor: THEME.colors.danger,
+    backgroundColor: THEME.colors.primary, // App theme color (Teal)
     marginLeft: 8,
   },
   logoutModalBtnConfirmText: {
     color: '#ffffff',
     fontSize: 14,
     fontWeight: '700',
+  },
+  wardFilterRow: {
+    paddingHorizontal: 16,
+    marginBottom: 12,
+  },
+  wardPickerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#ffffff',
+    borderWidth: 1.2,
+    borderColor: THEME.colors.border,
+    borderRadius: 8,
+    height: 40,
+    paddingHorizontal: 12,
+  },
+  wardPickerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  wardPickerLabelText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: THEME.colors.textMedium,
+    marginLeft: 8,
+  },
+  wardPickerValueText: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: THEME.colors.primary,
+    flex: 1,
+  },
+  dropdownArrow: {
+    width: 6,
+    height: 6,
+    borderLeftWidth: 1.5,
+    borderBottomWidth: 1.5,
+    borderColor: THEME.colors.textMedium,
+    transform: [{ rotate: '-45deg' }],
+    marginTop: -2,
+    marginLeft: 6,
+  },
+  wardModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    justifyContent: 'flex-end',
+  },
+  wardModalContent: {
+    backgroundColor: '#ffffff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '75%',
+    paddingTop: 20,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
+    paddingHorizontal: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
+    elevation: 10,
+  },
+  wardModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  wardModalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: THEME.colors.textDark,
+  },
+  wardModalCloseText: {
+    fontSize: 14.5,
+    fontWeight: '700',
+    color: THEME.colors.primary,
+  },
+  wardModalSearchWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f1f5f9',
+    borderRadius: 10,
+    height: 44,
+    paddingHorizontal: 12,
+    marginBottom: 16,
+  },
+  wardModalSearchInput: {
+    flex: 1,
+    paddingLeft: 8,
+    fontSize: 14,
+    color: THEME.colors.textDark,
+    height: '100%',
+  },
+  wardModalList: {
+    maxHeight: 350,
+  },
+  wardModalItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  wardModalItemActive: {
+    borderBottomColor: THEME.colors.primary + '33',
+  },
+  wardModalItemText: {
+    fontSize: 14.5,
+    color: THEME.colors.textDark,
+    fontWeight: '500',
+    flex: 1,
+  },
+  wardModalItemTextActive: {
+    color: THEME.colors.primary,
+    fontWeight: '800',
+  },
+  checkmarkIcon: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: THEME.colors.primary,
+    marginLeft: 8,
   },
 });

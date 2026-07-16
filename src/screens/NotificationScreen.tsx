@@ -135,11 +135,12 @@ export const NotificationScreen = ({ onBack }: NotificationScreenProps) => {
       
       {/* Header Bar */}
       <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <TouchableOpacity onPress={onBack} activeOpacity={0.7} style={styles.backBtn}>
-            {/* Back Arrow Chevron */}
-            <View style={styles.backArrow} />
-          </TouchableOpacity>
+        <TouchableOpacity onPress={onBack} activeOpacity={0.7} style={styles.backBtn}>
+          {/* Back Arrow Chevron */}
+          <View style={styles.backArrow} />
+        </TouchableOpacity>
+        
+        <View style={styles.headerTitleContainer}>
           <Text style={styles.headerTitle}>Notifications</Text>
           {unreadCount > 0 && (
             <View style={styles.headerBadge}>
@@ -149,7 +150,7 @@ export const NotificationScreen = ({ onBack }: NotificationScreenProps) => {
         </View>
         
         {notifications.length > 0 && (
-          <TouchableOpacity onPress={handleClearAll} activeOpacity={0.7} style={styles.clearAllBtn}>
+          <TouchableOpacity onPress={handleClearAll} activeOpacity={0.7} style={styles.clearAllBtnAbsolute}>
             <Text style={styles.clearAllText}>Clear All</Text>
           </TouchableOpacity>
         )}
@@ -252,39 +253,43 @@ const styles = StyleSheet.create({
     height: 56,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     backgroundColor: THEME.colors.primary,
-    paddingHorizontal: 16,
+    position: 'relative',
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 16,
     elevation: 4,
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,
     shadowRadius: 3,
   },
-  headerLeft: {
+  headerTitleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
   },
   backBtn: {
+    position: 'absolute',
+    left: 16,
     width: 32,
     height: 32,
     justifyContent: 'center',
-    alignItems: 'flex-start',
+    alignItems: 'center',
+    zIndex: 10,
   },
   backArrow: {
-    width: 12,
-    height: 12,
+    width: 11,
+    height: 11,
     borderLeftWidth: 2.5,
     borderBottomWidth: 2.5,
     borderColor: '#ffffff',
     transform: [{ rotate: '45deg' }],
-    marginLeft: 4,
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: '700',
     color: '#ffffff',
-    marginLeft: 8,
   },
   headerBadge: {
     backgroundColor: '#ffffff',
@@ -301,9 +306,12 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: THEME.colors.primary,
   },
-  clearAllBtn: {
+  clearAllBtnAbsolute: {
+    position: 'absolute',
+    right: 16,
     paddingVertical: 6,
     paddingHorizontal: 10,
+    zIndex: 10,
   },
   clearAllText: {
     fontSize: 14,

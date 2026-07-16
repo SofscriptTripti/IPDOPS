@@ -283,3 +283,143 @@ export const ExitIcon = ({ color }: { color: string }) => (
     </View>
   </View>
 );
+
+// Edit Pencil Icon
+export const EditIcon = ({ color }: { color: string }) => (
+  <View style={{ width: 18, height: 18, justifyContent: 'center', alignItems: 'center' }}>
+    <View style={{
+      width: 11,
+      height: 3.5,
+      borderWidth: 1.4,
+      borderColor: color,
+      borderRadius: 1,
+      transform: [{ rotate: '-45deg' }],
+      marginTop: -2,
+    }} />
+    <View style={{
+      width: 0,
+      height: 0,
+      borderLeftWidth: 1.5,
+      borderLeftColor: 'transparent',
+      borderRightWidth: 1.5,
+      borderRightColor: 'transparent',
+      borderBottomWidth: 2.5,
+      borderBottomColor: color,
+      transform: [{ rotate: '-45deg' }],
+      position: 'absolute',
+      bottom: 3.5,
+      left: 3.5,
+    }} />
+  </View>
+);
+
+// Delete Icon (Single Trash Bin)
+export const DeleteIcon = ({ color }: { color: string }) => (
+  <View style={{ width: 18, height: 18, justifyContent: 'center', alignItems: 'center' }}>
+    <View style={{ width: 11, height: 1.4, backgroundColor: color, borderRadius: 0.5, marginBottom: 1 }} />
+    <View style={{ width: 4, height: 1.2, backgroundColor: color, borderTopLeftRadius: 1, borderTopRightRadius: 1, position: 'absolute', top: 1.5 }} />
+    <View style={{
+      width: 8,
+      height: 9,
+      borderWidth: 1.4,
+      borderColor: color,
+      borderTopWidth: 0,
+      borderBottomLeftRadius: 1.2,
+      borderBottomRightRadius: 1.2,
+    }} />
+  </View>
+);
+
+// Delete Everyone Icon (Double Trash Bin)
+export const DeleteEveryoneIcon = ({ color }: { color: string }) => (
+  <View style={{ width: 22, height: 22, justifyContent: 'center', alignItems: 'center' }}>
+    <View style={{ position: 'absolute', left: 2, top: 2 }}>
+      <View style={{ width: 9, height: 1.2, backgroundColor: color, borderRadius: 0.5, marginBottom: 1 }} />
+      <View style={{
+        width: 7,
+        height: 8,
+        borderWidth: 1.2,
+        borderColor: color,
+        borderTopWidth: 0,
+        borderBottomLeftRadius: 1,
+        borderBottomRightRadius: 1,
+      }} />
+    </View>
+    <View style={{ position: 'absolute', right: 2, bottom: 2 }}>
+      <View style={{ width: 9, height: 1.2, backgroundColor: color, borderRadius: 0.5, marginBottom: 1, opacity: 0.6 }} />
+      <View style={{
+        width: 7,
+        height: 8,
+        borderWidth: 1.2,
+        borderColor: color,
+        borderTopWidth: 0,
+        borderBottomLeftRadius: 1,
+        borderBottomRightRadius: 1,
+        opacity: 0.6,
+      }} />
+    </View>
+  </View>
+);
+
+// Copy Icon (Double Sheet Layout)
+export const CopyIcon = ({ color }: { color: string }) => (
+  <View style={{ width: 18, height: 18, justifyContent: 'center', alignItems: 'center' }}>
+    <View style={{
+      width: 8,
+      height: 10,
+      borderWidth: 1.3,
+      borderColor: color,
+      borderRadius: 1,
+      position: 'absolute',
+      top: 2,
+      left: 2,
+    }} />
+    <View style={{
+      width: 8,
+      height: 10,
+      borderWidth: 1.3,
+      borderColor: color,
+      borderRadius: 1,
+      backgroundColor: '#ffffff',
+      position: 'absolute',
+      bottom: 2,
+      right: 2,
+    }} />
+  </View>
+);
+
+// Forward Arrow Icon
+export const ForwardIcon = ({ color }: { color: string }) => (
+  <View style={{ width: 18, height: 18, justifyContent: 'center', alignItems: 'center' }}>
+    <View style={{
+      width: 12,
+      height: 12,
+      justifyContent: 'center',
+      alignItems: 'center',
+    }}>
+      <View style={{
+        width: 7,
+        height: 7,
+        borderTopWidth: 1.8,
+        borderRightWidth: 1.8,
+        borderColor: color,
+        transform: [{ rotate: '45deg' }],
+        position: 'absolute',
+        right: 0,
+        top: 2.5,
+      }} />
+      <View style={{
+        width: 9,
+        height: 9,
+        borderLeftWidth: 1.8,
+        borderTopWidth: 1.8,
+        borderColor: color,
+        borderTopLeftRadius: 5,
+        transform: [{ rotate: '45deg' }],
+        position: 'absolute',
+        left: 0,
+        top: 4,
+      }} />
+    </View>
+  </View>
+);

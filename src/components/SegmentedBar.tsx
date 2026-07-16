@@ -1,17 +1,28 @@
 import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, View, Text } from 'react-native';
 
 const styles = StyleSheet.create({
   progressContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     flex: 1,
   },
-  progressSegment: {
+  segmentWrapper: {
     flex: 1,
+    flexDirection: 'column',
+    alignItems: 'center',
+    marginHorizontal: 1.2,
+  },
+  progressSegment: {
+    width: '100%',
     height: 4.5,
     borderRadius: 2,
-    marginHorizontal: 1.2,
+  },
+  segmentLabel: {
+    fontSize: 8.5,
+    fontWeight: '700',
+    color: '#64748b',
+    marginTop: 4,
   },
 });
 
@@ -31,19 +42,23 @@ export const SegmentedProgressBar = ({
   const segments = [];
   for (let i = 0; i < total; i++) {
     let bg = '#e2e8f0'; // empty segment color
-    if (i < filled) {
-      bg = (segmentColors && segmentColors[i]) || color || '#0b665c';
+    if (segmentColors && segmentColors[i]) {
+      bg = segmentColors[i];
+    } else if (i < filled) {
+      bg = color || '#0b665c';
     }
     segments.push(
-      <View
-        key={i}
-        style={[
-          styles.progressSegment,
-          {
-            backgroundColor: bg,
-          },
-        ]}
-      />
+      <View key={i} style={styles.segmentWrapper}>
+        <View
+          style={[
+            styles.progressSegment,
+            {
+              backgroundColor: bg,
+            },
+          ]}
+        />
+        <Text style={styles.segmentLabel}>T{i + 1}</Text>
+      </View>
     );
   }
   return <View style={styles.progressContainer}>{segments}</View>;

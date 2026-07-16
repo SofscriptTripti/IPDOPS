@@ -30,7 +30,7 @@ export const authService = {
    * Performs authentication POST request to hmisloginapi login endpoint.
    */
   async login(userId: string, password: string, forceRelogin: boolean = false): Promise<LoginResponse> {
-    const url = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.LOGIN}`;
+    const url = `${API_CONFIG.AUTH_BASE_URL}${API_CONFIG.ENDPOINTS.LOGIN}`;
     const payload = {
       userId,
       password,
@@ -95,7 +95,7 @@ export const authService = {
    * Performs authentication POST request to hmisloginapi logout endpoint.
    */
   async logout(token: string, userId: string, sessionId: number): Promise<{ success: boolean; message: string | null }> {
-    const url = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.LOGOUT}`;
+    const url = `${API_CONFIG.AUTH_BASE_URL}${API_CONFIG.ENDPOINTS.LOGOUT}`;
     const payload = {
       userId,
       sessionId,

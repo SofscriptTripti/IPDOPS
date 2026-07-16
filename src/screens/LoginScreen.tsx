@@ -52,9 +52,6 @@ export const LoginScreen = ({ onLoginSuccess }: LoginScreenProps) => {
     }
 
     setIsLoading(true);
-    
-    // Commented out actual API hit on SignIn button
-    /*
     try {
       const response = await authService.login(username.trim(), password, false);
       setIsLoading(false);
@@ -94,9 +91,9 @@ export const LoginScreen = ({ onLoginSuccess }: LoginScreenProps) => {
       setIsLoading(false);
       Alert.alert('Sign In Error', error.message || 'An error occurred during authentication.');
     }
-    */
 
-    // Set default credentials check: SSSL and Creative@123
+    // Commented out default credentials check: SSSL and Creative@123
+    /*
     setTimeout(() => {
       setIsLoading(false);
       if (username.trim() === 'SSSL' && password === 'Creative@123') {
@@ -120,6 +117,7 @@ export const LoginScreen = ({ onLoginSuccess }: LoginScreenProps) => {
         Alert.alert('Sign In Failed', 'Invalid Employee ID/Username or Password.');
       }
     }, 800);
+    */
   };
 
   return (
@@ -142,7 +140,7 @@ export const LoginScreen = ({ onLoginSuccess }: LoginScreenProps) => {
           <View style={[styles.tealHeader, { paddingTop: insets.top + 32 }]}>
             <View style={styles.logoOuterContainer}>
               <Image
-                source={require('../../assets/bethany_logo.png')}
+                source={require('../../assets/careworksone_logo.png')}
                 style={styles.logo as any}
                 resizeMode="contain"
               />
@@ -154,6 +152,7 @@ export const LoginScreen = ({ onLoginSuccess }: LoginScreenProps) => {
             <View style={styles.badge}>
               <PinIcon color="#ffffff" />
               <Text style={styles.badgeText}>Powered by SOFSCRIPT PVT LTD</Text>
+             
             </View>
           </View>
 
@@ -244,13 +243,15 @@ export const LoginScreen = ({ onLoginSuccess }: LoginScreenProps) => {
               )}
             </TouchableOpacity>
 
-            {/* Prototype Note */}
-            <Text style={styles.noteText}>
-              Prototype note: this screen simulates a call to the CAREWORKS HMIS auth API. Any Employee ID with a password of 4+ characters will sign in.
-            </Text>
+          
           </View>
 
           {/* Footer outside the card */}
+          <Image
+            source={require('../../assets/sofscript_logo.png')}
+            style={styles.footerLogo as any}
+            resizeMode="contain"
+          />
           <Text style={styles.footerText}>
             SOFSCRIPT - Bethany Hospital - Mumbai
           </Text>
@@ -332,6 +333,11 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 10,
     fontWeight: '600',
+    marginLeft: 6,
+  },
+  sofscriptLogo: {
+    width: 50,
+    height: 14,
     marginLeft: 6,
   },
   formContainer: {
@@ -438,13 +444,20 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 18,
   },
+  footerLogo: {
+    width: 180,
+    height: 50,
+    alignSelf: 'center',
+    marginTop: 0,
+    marginBottom: 4,
+  },
   footerText: {
     color: THEME.colors.textMuted,
     fontSize: 12,
     fontWeight: '600',
     textAlign: 'center',
     letterSpacing: 0.5,
-    marginTop: 24,
+    marginTop: 4,
     marginBottom: 16,
   },
 });

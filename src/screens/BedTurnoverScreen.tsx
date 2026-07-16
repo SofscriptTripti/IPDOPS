@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   Text,
@@ -6,7 +6,7 @@ import {
   TouchableOpacity,
   ScrollView,
   TextInput,
-  Platform,
+  Platform,         
   Alert,
   StatusBar,
   KeyboardAvoidingView,
@@ -16,10 +16,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { THEME } from '../constants/theme';
 import { Checkbox } from '../components/Checkbox';
 import { UserSessionData } from '../services/authService';
+import { trackerService } from '../services/trackerService';
+import { LoadingIndicator } from '../components/LoadingIndicator';
+import { SubModuleItem } from './SubModuleSelectionScreen';
 
 interface BedTurnoverScreenProps {
   sessionData: UserSessionData;
   onBack: () => void;
+  visible?: boolean;
+  selectedSubModule: SubModuleItem | null;
 }
 
 interface HousekeepingBed {
@@ -34,10 +39,12 @@ interface HousekeepingBed {
   status: 'UNCLEANED' | 'CLEANED';
   wardCategory: '3rd Floor' | '4th Floor' | '5th Floor' | '2nd Floor';
   bedCategory: 'Double Occ' | 'General Ward' | 'Special';
+  rawItem?: any;
 }
 
-export const BedTurnoverScreen = ({ sessionData, onBack }: BedTurnoverScreenProps) => {
+export const BedTurnoverScreen = ({ sessionData, onBack, visible, selectedSubModule }: BedTurnoverScreenProps) => {
   const insets = useSafeAreaInsets();
+  const [hasLoaded, setHasLoaded] = useState(false);
   
   // Tab control
   const [activeTab, setActiveTab] = useState<'Pending' | 'Cleaned'>('Pending');
@@ -48,61 +55,183 @@ export const BedTurnoverScreen = ({ sessionData, onBack }: BedTurnoverScreenProp
   const [showWardMenu, setShowWardMenu] = useState(false);
   const [showBedTypeMenu, setShowBedTypeMenu] = useState(false);
 
-  // Beds data
-  const [beds, setBeds] = useState<HousekeepingBed[]>([
-    {
-      id: '1',
-      bedNo: 'Bed 305A',
-      floorInfo: 'DOUBLE OCC.-3RD FLR.',
-      wardType: 'DOUBLE OCC (N)',
-      origin: 'DISCHARGE',
-      intimationNo: '',
-      genderType: 'ALL',
-      pendingText: 'Pending 1 Day 0 hours',
-      status: 'UNCLEANED',
-      wardCategory: '3rd Floor',
-      bedCategory: 'Double Occ',
-    },
-    {
-      id: '2',
-      bedNo: 'Bed 517C',
-      floorInfo: 'NEW GENERAL WARD - 5TH FLR.',
-      wardType: 'GENERAL WARD (N)',
-      origin: 'DISCHARGE',
-      intimationNo: '',
-      genderType: 'ALL',
-      pendingText: 'Pending 1 Day 14 hours',
-      status: 'UNCLEANED',
-      wardCategory: '5th Floor',
-      bedCategory: 'General Ward',
-    },
-    {
-      id: '3',
-      bedNo: 'Bed 418A',
-      floorInfo: 'DOUBLE OCC - 4TH FLR.',
-      wardType: 'DOUBLE OCC (N)',
-      origin: 'DISCHARGE',
-      intimationNo: '',
-      genderType: 'ALL',
-      pendingText: 'Pending 2 Days 1 hour',
-      status: 'UNCLEANED',
-      wardCategory: '4th Floor',
-      bedCategory: 'Double Occ',
-    },
-    {
-      id: '4',
-      bedNo: 'Bed 102B',
-      floorInfo: 'SPECIAL WARD - 2ND FLR.',
-      wardType: 'SPECIAL (N)',
-      origin: 'DISCHARGE',
-      intimationNo: '11029',
-      genderType: 'FEMALE',
-      pendingText: 'Cleaned Today at 10:45 AM',
-      status: 'CLEANED',
-      wardCategory: '2nd Floor',
-      bedCategory: 'Special',
-    },
-  ]);
+  // Dynamic Bed Types state
+  interface BedTypeItem {
+    bed_typ_cd: number;
+    bed_typ_dcd: string | null;
+  }
+  const [bedTypes, setBedTypes] = useState<BedTypeItem[]>([]);
+  const [beds, setBeds] = useState<HousekeepingBed[]>([]);
+  const [isLoadingBeds, setIsLoadingBeds] = useState(true);
+  const [userRights, setUserRights] = useState<{
+    access: boolean;
+    Save: boolean;
+    Delete: boolean;
+    Print: boolean;
+    Authorise: boolean;
+  }>({
+    access: true,
+    Save: true,
+    Delete: true,
+    Print: true,
+    Authorise: true
+  });
+
+  const mapApiBedToHousekeepingBed = (item: any, isCleaned: boolean): HousekeepingBed => {
+    const id = String(item?.RowNumber || item?.BedNo || Math.random());
+    
+    let wardCategory: '3rd Floor' | '4th Floor' | '5th Floor' | '2nd Floor' = '3rd Floor';
+    const wrdUpper = (item?.WrdDcd || '').toUpperCase();
+    if (wrdUpper.includes('2ND') || item?.FlrNo === 2) wardCategory = '2nd Floor';
+    else if (wrdUpper.includes('3RD') || item?.FlrNo === 3) wardCategory = '3rd Floor';
+    else if (wrdUpper.includes('4TH') || item?.FlrNo === 4) wardCategory = '4th Floor';
+    else if (wrdUpper.includes('5TH') || item?.FlrNo === 5) wardCategory = '5th Floor';
+
+    let bedCategory: 'Double Occ' | 'General Ward' | 'Special' = 'General Ward';
+    const dcdUpper = (item?.bedtypdcd || '').toUpperCase();
+    if (dcdUpper.includes('DOUBLE')) bedCategory = 'Double Occ';
+    else if (dcdUpper.includes('SINGLE') || dcdUpper.includes('ICU') || dcdUpper.includes('NICU') || dcdUpper.includes('SPECIAL')) bedCategory = 'Special';
+
+    let genderType = 'ALL';
+    if (item?.PtnSexFlg === 'B') genderType = 'ALL';
+    else if (item?.PtnSexFlg === 'M') genderType = 'MALE';
+    else if (item?.PtnSexFlg === 'F') genderType = 'FEMALE';
+    else if (item?.PtnSexFlg) genderType = item.PtnSexFlg;
+
+    let pendingText = '';
+    if (isCleaned) {
+      const cleanTime = item?.CleanDt && item.CleanDt !== '1900-01-01T00:00:00'
+        ? new Date(item.CleanDt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        : '10:45 AM';
+      pendingText = `Cleaned Today at ${cleanTime}`;
+    } else {
+      const daysDiff = Math.floor(item?.datehourdiff || 0);
+      const hoursDiff = Math.round(((item?.datehourdiff || 0) - daysDiff) * 24);
+      if (daysDiff > 0) {
+        pendingText = `Pending ${daysDiff} Day${daysDiff !== 1 ? 's' : ''} ${hoursDiff} hour${hoursDiff !== 1 ? 's' : ''}`;
+      } else {
+        pendingText = `Pending ${hoursDiff} hour${hoursDiff !== 1 ? 's' : ''}`;
+      }
+    }
+
+    return {
+      id,
+      bedNo: item?.BedNo || `Bed ${item?.BedTypCd || ''}`,
+      floorInfo: item?.WrdDcd || 'GENERAL WARD',
+      wardType: item?.bedtypdcd || 'GENERAL WARD',
+      origin: item?.ReqSource || 'DISCHARGE',
+      intimationNo: item?.IntimationNo || '',
+      genderType,
+      pendingText,
+      status: isCleaned ? 'CLEANED' : 'UNCLEANED',
+      wardCategory,
+      bedCategory,
+      rawItem: item,
+    };
+  };
+
+  const fetchBedData = async () => {
+    setIsLoadingBeds(true);
+    try {
+      console.log('Fetching Pending Cleaning and Cleaned Today beds...');
+      const cocd = sessionData.coCd || "1";
+      const div = sessionData.div || 1;
+      const loc = sessionData.loc || 1;
+
+      // Fetch Pending Beds (bedStsCd = 7)
+      const pendingRes = await trackerService.getBedsWithParam(sessionData.token, {
+        cocd,
+        div,
+        loc,
+        bedStsCd: 7
+      });
+
+      // Fetch Cleaned Beds (bedStsCd = 1)
+      const cleanedRes = await trackerService.getBedsWithParam(sessionData.token, {
+        cocd,
+        div,
+        loc,
+        bedStsCd: 1
+      });
+
+      const mappedPending: HousekeepingBed[] = [];
+      if (pendingRes && pendingRes.success && pendingRes.data && Array.isArray(pendingRes.data.beds)) {
+        pendingRes.data.beds.forEach((item: any) => {
+          mappedPending.push(mapApiBedToHousekeepingBed(item, false));
+        });
+      }
+
+      const mappedCleaned: HousekeepingBed[] = [];
+      if (cleanedRes && cleanedRes.success && cleanedRes.data && Array.isArray(cleanedRes.data.beds)) {
+        cleanedRes.data.beds.forEach((item: any) => {
+          mappedCleaned.push(mapApiBedToHousekeepingBed(item, true));
+        });
+      }
+
+      console.log(`Beds loaded. Pending: ${mappedPending.length}, Cleaned: ${mappedCleaned.length}`);
+      setBeds([...mappedPending, ...mappedCleaned]);
+    } catch (err) {
+      console.warn('Failed to load Bed Turnover list data:', err);
+    } finally {
+      setIsLoadingBeds(false);
+    }
+  };
+
+  const initData = async (isBackground: boolean = false) => {
+    if (!isBackground) {
+      setIsLoadingBeds(true);
+    }
+    try {
+      const modCd = selectedSubModule?.ModCd ?? 490;
+      const subModCd = selectedSubModule?.SubModCd ?? 1384;
+      console.log(`Checking user rights for Bed Turnover module... ModCd: ${modCd}, SubModCd: ${subModCd}`);
+      const rightsRes = await trackerService.checkUserRights(
+        sessionData.token,
+        sessionData.userId,
+        modCd,
+        subModCd
+      );
+      console.log('checkUserRights API Response:', JSON.stringify(rightsRes, null, 2));
+      if (rightsRes && rightsRes.success && rightsRes.data) {
+        console.log('Loaded user rights:', rightsRes.data);
+        setUserRights({
+          access: rightsRes.data.access !== false,
+          Save: rightsRes.data.Save !== false,
+          Delete: rightsRes.data.Delete !== false,
+          Print: rightsRes.data.Print !== false,
+          Authorise: rightsRes.data.Authorise !== false,
+        });
+      }
+    } catch (err) {
+      console.warn('Failed to load user rights, allowing access by default:', err);
+    }
+
+    try {
+      console.log('Fetching Bed Type Master data for filters...');
+      const resBedTypes = await trackerService.getBedTypes(sessionData.token);
+      if (resBedTypes && resBedTypes.success && Array.isArray(resBedTypes.data)) {
+        const validBedTypes = resBedTypes.data.filter((b: any) => b.bed_typ_dcd && b.bed_typ_dcd.trim().length > 0);
+        console.log('Loaded Bed Type Master items for dropdown filter:', validBedTypes.length);
+        setBedTypes(validBedTypes);
+      }
+    } catch (err) {
+      console.warn('Failed to load Bed Type Master data:', err);
+    }
+    
+    await fetchBedData();
+    setHasLoaded(true);
+  };
+
+  useEffect(() => {
+    initData(false);
+  }, [sessionData, selectedSubModule]);
+
+  useEffect(() => {
+    if (visible && hasLoaded) {
+      console.log('BedTurnoverScreen became visible, refreshing rights and data in background...');
+      initData(true);
+    }
+  }, [visible]);
 
   // Selected bed IDs for bulk actions
   const [selectedBedIds, setSelectedBedIds] = useState<Record<string, boolean>>({});
@@ -135,7 +264,9 @@ export const BedTurnoverScreen = ({ sessionData, onBack }: BedTurnoverScreenProp
 
   const visibleBeds = (activeTab === 'Pending' ? pendingBeds : cleanedBeds).filter(b => {
     const matchesWard = selectedWard === 'All' || b.wardCategory === selectedWard;
-    const matchesBedType = selectedBedType === 'All' || b.bedCategory === selectedBedType;
+    const matchesBedType = selectedBedType === 'All' || 
+      b.bedCategory.toLowerCase().includes(selectedBedType.toLowerCase()) || 
+      b.wardType.toLowerCase().includes(selectedBedType.toLowerCase());
     return matchesWard && matchesBedType;
   });
 
@@ -164,45 +295,143 @@ export const BedTurnoverScreen = ({ sessionData, onBack }: BedTurnoverScreenProp
   };
 
   // Mark selected as cleaned
-  const handleMarkCleanedBulk = () => {
+  const handleMarkCleanedBulk = async () => {
     const selectedIds = Object.keys(selectedBedIds).filter(id => selectedBedIds[id]);
     if (selectedIds.length === 0) {
       showCustomAlert('Housekeeping', 'Please select at least one bed to mark as cleaned.', 'warning');
       return;
     }
 
-    setBeds(prev => prev.map(b => {
-      if (selectedIds.includes(b.id)) {
-        return {
-          ...b,
-          status: 'CLEANED',
-          pendingText: `Cleaned Today at ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
-        };
-      }
-      return b;
-    }));
+    // Filter beds that are selected and validate that they have a valid intimation number
+    const selectedBeds = beds.filter(b => selectedIds.includes(b.id));
+    const invalidBeds = selectedBeds.filter(b => !b.intimationNo || !b.intimationNo.trim() || isNaN(parseInt(b.intimationNo, 10)));
+    
+    if (invalidBeds.length > 0) {
+      const invalidNames = invalidBeds.map(b => b.bedNo).join(', ');
+      showCustomAlert('Warning', `Please enter a valid Intimation no. for: ${invalidNames}`, 'warning');
+      return;
+    }
 
-    setSelectedBedIds({});
-    showCustomAlert('Success', `${selectedIds.length} bed(s) successfully marked as cleaned!`, 'success');
+    try {
+      setIsLoadingBeds(true);
+      
+      // Perform API calls for all selected beds
+      for (const bed of selectedBeds) {
+        const raw = bed.rawItem || {};
+        const reqNo = raw.ReqNo || 0;
+        const ipNo = raw.IpNo || 0;
+        const docCd = raw.DocCd || 0;
+        const bedNo = raw.BedNo || bed.bedNo;
+
+        const now = new Date();
+        const pad = (n: number, m = 2) => String(n).padStart(m, '0');
+        const updtDtTm = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}.${pad(now.getMilliseconds(), 3)}`;
+
+        const payload = {
+          cocd: sessionData.coCd || "1",
+          div: sessionData.div || 1,
+          loc: sessionData.loc || 1,
+          bedNo: bedNo,
+          reqNo: reqNo,
+          ipNo: ipNo,
+          updateType: 2,
+          refNo: bed.intimationNo,
+          docCd: docCd,
+          bedStsCd: 1,
+          updtDtTm: updtDtTm,
+          updtUsrId: sessionData.userId || raw.UpdtUsrId || "SSSL",
+        };
+
+        console.log('====================================');
+        console.log(`Calling changeBedStatus (Bulk) for bed ${bed.bedNo}:`);
+        console.log('Payload:', JSON.stringify(payload, null, 2));
+        console.log('====================================');
+
+        await trackerService.changeBedStatus(sessionData.token, payload);
+      }
+
+      setSelectedBedIds({});
+      
+      // Fetch fresh response from API only (no dummy response update)
+      await fetchBedData();
+
+      showCustomAlert('Success', `${selectedIds.length} bed(s) successfully marked as cleaned!`, 'success');
+    } catch (err: any) {
+      console.warn('API Error in Bulk changeBedStatus:', err);
+      showCustomAlert('Error', err.message || 'An error occurred while changing bed status.', 'warning');
+    } finally {
+      setIsLoadingBeds(false);
+    }
   };
 
-  const handleMarkCleanedSingle = (id: string) => {
-    setBeds(prev => prev.map(b => {
-      if (b.id === id) {
-        return {
-          ...b,
-          status: 'CLEANED',
-          pendingText: `Cleaned Today at ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
-        };
+  const handleMarkCleanedSingle = async (id: string) => {
+    if (!userRights.Save) {
+      showCustomAlert('Access Denied', 'You do not have permission to save changes.', 'warning');
+      return;
+    }
+
+    const bed = beds.find(b => b.id === id);
+    if (!bed) return;
+
+    // Parse the intimation number
+    if (!bed.intimationNo || !bed.intimationNo.trim() || isNaN(parseInt(bed.intimationNo, 10))) {
+      showCustomAlert('Warning', 'Please enter Intimation no. first.', 'warning');
+      return;
+    }
+
+    const raw = bed.rawItem || {};
+    const reqNo = raw.ReqNo || 0;
+    const ipNo = raw.IpNo || 0;
+    const docCd = raw.DocCd || 0;
+    const bedNo = raw.BedNo || bed.bedNo;
+
+    // Format current date/time to local ISO-like string format: "YYYY-MM-DDTHH:mm:ss.SSS"
+    const now = new Date();
+    const pad = (n: number, m = 2) => String(n).padStart(m, '0');
+    const updtDtTm = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}.${pad(now.getMilliseconds(), 3)}`;
+
+    const payload = {
+      cocd: sessionData.coCd || "1",
+      div: sessionData.div || 1,
+      loc: sessionData.loc || 1,
+      bedNo: bedNo,
+      reqNo: reqNo,
+      ipNo: ipNo,
+      updateType: 2,
+      refNo: bed.intimationNo,
+      docCd: docCd,
+      bedStsCd: 1,
+      updtDtTm: updtDtTm,
+      updtUsrId: sessionData.userId || raw.UpdtUsrId || "SSSL",
+    };
+
+    console.log('====================================');
+    console.log('Calling changeBedStatus from BedTurnoverScreen:');
+    console.log('Payload:', JSON.stringify(payload, null, 2));
+    console.log('====================================');
+
+    try {
+      setIsLoadingBeds(true);
+      const res = await trackerService.changeBedStatus(sessionData.token, payload);
+      
+      if (res && res.success) {
+        const updated = { ...selectedBedIds };
+        delete updated[id];
+        setSelectedBedIds(updated);
+
+        // Fetch fresh response from API only (no dummy response update)
+        await fetchBedData();
+
+        showCustomAlert('Success', res.message || 'Bed successfully marked as cleaned!', 'success');
+      } else {
+        showCustomAlert('Failure', res?.message || 'Failed to update bed status.', 'warning');
       }
-      return b;
-    }));
-
-    const updated = { ...selectedBedIds };
-    delete updated[id];
-    setSelectedBedIds(updated);
-
-    showCustomAlert('Success', 'Bed successfully marked as cleaned!', 'success');
+    } catch (err: any) {
+      console.warn('API Error in changeBedStatus:', err);
+      showCustomAlert('Error', err.message || 'An error occurred while changing bed status.', 'warning');
+    } finally {
+      setIsLoadingBeds(false);
+    }
   };
 
   const handleUpdateIntimation = (id: string, value: string) => {
@@ -227,6 +456,10 @@ export const BedTurnoverScreen = ({ sessionData, onBack }: BedTurnoverScreenProp
 
   const countSelected = Object.keys(selectedBedIds).filter(id => selectedBedIds[id]).length;
 
+  if (isLoadingBeds) {
+    return <LoadingIndicator message="Loading Bed Details." />;
+  }
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <StatusBar barStyle="light-content" backgroundColor={THEME.colors.primary} translucent />
@@ -244,13 +477,13 @@ export const BedTurnoverScreen = ({ sessionData, onBack }: BedTurnoverScreenProp
             style={styles.backBtn}
             onPress={onBack}
           >
-            <Text style={styles.backArrow}>←</Text>
+            <View style={styles.backArrow} />
           </TouchableOpacity>
           <View style={styles.titleContainer}>
-            <Text style={styles.headerSubtitle}>HOUSEKEEPING</Text>
-            <Text style={styles.headerTitle}>Bed Turnover</Text>
+            {/* <Text style={styles.headerSubtitle}>HOUSEKEEPING</Text> */}
+            <Text style={styles.headerTitle}>HouseKeeping Bed Turnover</Text>
           </View>
-          <View style={styles.liveBadge}>
+          <View style={styles.liveBadgeAbsolute}>
             <View style={styles.liveDot} />
             <Text style={styles.liveText}>Live</Text>
           </View>
@@ -337,20 +570,33 @@ export const BedTurnoverScreen = ({ sessionData, onBack }: BedTurnoverScreenProp
               <Text style={styles.dropdownArrow}>▼</Text>
             </TouchableOpacity>
             {showBedTypeMenu && (
-              <View style={styles.dropdownMenu}>
-                {['All', 'Double Occ', 'General Ward', 'Special'].map(t => (
-                  <TouchableOpacity
-                    key={t}
-                    style={styles.menuItem}
-                    onPress={() => {
-                      setSelectedBedType(t);
-                      setShowBedTypeMenu(false);
-                    }}
-                  >
-                    <Text style={[styles.menuItemText, selectedBedType === t && styles.menuItemTextActive]}>{t}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+              <ScrollView style={[styles.dropdownMenu, { maxHeight: 220 }]} nestedScrollEnabled={true}>
+                <TouchableOpacity
+                  style={styles.menuItem}
+                  onPress={() => {
+                    setSelectedBedType('All');
+                    setShowBedTypeMenu(false);
+                  }}
+                >
+                  <Text style={[styles.menuItemText, selectedBedType === 'All' && styles.menuItemTextActive]}>All</Text>
+                </TouchableOpacity>
+
+                {bedTypes.map(t => {
+                  const label = t.bed_typ_dcd || '';
+                  return (
+                    <TouchableOpacity
+                      key={t.bed_typ_cd}
+                      style={styles.menuItem}
+                      onPress={() => {
+                        setSelectedBedType(label);
+                        setShowBedTypeMenu(false);
+                      }}
+                    >
+                      <Text style={[styles.menuItemText, selectedBedType === label && styles.menuItemTextActive]}>{label}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
             )}
           </View>
         </View>
@@ -389,11 +635,6 @@ export const BedTurnoverScreen = ({ sessionData, onBack }: BedTurnoverScreenProp
           <Text style={styles.bedsCountText}>
             {visibleBeds.length} bed{visibleBeds.length !== 1 ? 's' : ''}
           </Text>
-          {activeTab === 'Pending' && visibleBeds.length > 0 && (
-            <View style={styles.selectAllContainer}>
-              <Checkbox checked={isAllSelected} onChange={handleSelectAll} label="Select all" />
-            </View>
-          )}
         </View>
 
         {/* Beds Grid / List */}
@@ -405,17 +646,6 @@ export const BedTurnoverScreen = ({ sessionData, onBack }: BedTurnoverScreenProp
           visibleBeds.map(bed => (
             <View key={bed.id} style={styles.bedCard}>
               <View style={styles.cardLayoutRow}>
-                {/* Left Checkbox (only for Pending uncleaned beds) */}
-                {bed.status === 'UNCLEANED' && (
-                  <View style={styles.cardCheckboxContainer}>
-                    <Checkbox
-                      checked={!!selectedBedIds[bed.id]}
-                      onChange={(checked) => toggleSelectBed(bed.id, checked)}
-                      label=""
-                    />
-                  </View>
-                )}
-
                 {/* Right Card details */}
                 <View style={styles.cardMainDetails}>
                   {/* Card Header */}
@@ -445,12 +675,13 @@ export const BedTurnoverScreen = ({ sessionData, onBack }: BedTurnoverScreenProp
                       <Text style={styles.gridLabel}>Intimation no.</Text>
                       {bed.status === 'UNCLEANED' ? (
                         <TextInput
-                          style={styles.gridInput}
+                          style={[styles.gridInput, !userRights.Save && { backgroundColor: '#e2e8f0', color: '#64748b' }]}
                           value={bed.intimationNo}
                           onChangeText={(text) => handleUpdateIntimation(bed.id, text)}
                           placeholder="Enter no."
                           placeholderTextColor="#94a3b8"
                           keyboardType="numeric"
+                          editable={userRights.Save}
                         />
                       ) : (
                         <Text style={styles.gridValue}>{bed.intimationNo || '—'}</Text>
@@ -472,8 +703,11 @@ export const BedTurnoverScreen = ({ sessionData, onBack }: BedTurnoverScreenProp
                       <TouchableOpacity 
                         activeOpacity={0.7} 
                         onPress={() => handleMarkCleanedSingle(bed.id)}
+                        disabled={!userRights.Save}
                       >
-                        <Text style={styles.markCleanedLink}>Mark Cleaned</Text>
+                        <Text style={[styles.markCleanedLink, !userRights.Save && { color: '#94a3b8', opacity: 0.5 }]}>
+                          Mark Cleaned
+                        </Text>
                       </TouchableOpacity>
                     )}
                   </View>
@@ -484,24 +718,6 @@ export const BedTurnoverScreen = ({ sessionData, onBack }: BedTurnoverScreenProp
         )}
       </ScrollView>
 
-      {/* Bottom Sticky Action Bar */}
-      <View style={[styles.bottomActionBar, { paddingBottom: insets.bottom + 12 }]}>
-        <TouchableOpacity
-          activeOpacity={0.8}
-          style={[styles.bulkActionBtn, countSelected === 0 && styles.bulkActionBtnDisabled]}
-          onPress={handleMarkCleanedBulk}
-          disabled={countSelected === 0}
-        >
-          <Text style={styles.bulkActionBtnText}>✓ Mark Cleaned ( {countSelected} )</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity 
-          activeOpacity={0.7} 
-          style={styles.exitBtn}
-          onPress={onBack}
-        >
-          <Text style={styles.exitBtnText}>Exit</Text>
-        </TouchableOpacity>
       {/* Custom Themed Alert Modal */}
       <Modal
         visible={alertConfig.visible}
@@ -511,16 +727,7 @@ export const BedTurnoverScreen = ({ sessionData, onBack }: BedTurnoverScreenProp
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <View style={[
-              styles.modalIconCircle,
-              alertConfig.type === 'success' && styles.bgSuccess,
-              alertConfig.type === 'warning' && styles.bgWarning,
-              alertConfig.type === 'info' && styles.bgInfo
-            ]}>
-              <Text style={styles.modalIcon}>
-                {alertConfig.type === 'success' ? '✓' : alertConfig.type === 'warning' ? '⚠' : 'ℹ'}
-              </Text>
-            </View>
+
             <Text style={styles.modalTitle}>{alertConfig.title}</Text>
             <Text style={styles.modalText}>{alertConfig.message}</Text>
             <TouchableOpacity
@@ -533,7 +740,6 @@ export const BedTurnoverScreen = ({ sessionData, onBack }: BedTurnoverScreenProp
           </View>
         </View>
       </Modal>
-      </View>
       </KeyboardAvoidingView>
     </View>
   );
@@ -555,28 +761,30 @@ const styles = StyleSheet.create({
   headerTop: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
+    position: 'relative',
+    height: 40,
   },
   backBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    position: 'absolute',
+    left: 0,
+    width: 32,
+    height: 32,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.25)',
+    zIndex: 10,
   },
   backArrow: {
-    color: '#ffffff',
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginTop: -2,
+    width: 11,
+    height: 11,
+    borderLeftWidth: 2.5,
+    borderBottomWidth: 2.5,
+    borderColor: '#ffffff',
+    transform: [{ rotate: '45deg' }],
   },
   titleContainer: {
-    flex: 1,
     alignItems: 'center',
-    marginRight: 24, // balance arrow offset
+    justifyContent: 'center',
   },
   headerSubtitle: {
     fontSize: 10,
@@ -590,13 +798,16 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     marginTop: 1,
   },
-  liveBadge: {
+  liveBadgeAbsolute: {
+    position: 'absolute',
+    right: 0,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.15)',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
+    zIndex: 10,
   },
   liveDot: {
     width: 6,
