@@ -50,7 +50,11 @@ export default function App() {
         setCurrentScreen('SubModuleSelection');
         return true;
       }
-      setCurrentScreen('Dashboard');
+      if (selectedSubModule?.SubModCd === 1384) {
+        setCurrentScreen('SubModuleSelection');
+      } else {
+        setCurrentScreen('Dashboard');
+      }
       return true; // Intercepted back press successfully
     };
 
@@ -59,7 +63,7 @@ export default function App() {
     return () => {
       subscription.remove();
     };
-  }, [currentScreen]);
+  }, [currentScreen, selectedSubModule]);
 
   const handleLoginSuccess = async (data: UserSessionData) => {
     await authService.saveSession(data);
@@ -83,7 +87,11 @@ export default function App() {
       if (res && res.success && res.data && res.data.access === true) {
         console.log('Access granted for submodule:', subModule.SubModName);
         setSelectedSubModule(subModule);
-        setCurrentScreen('Dashboard');
+        if (subModule.SubModCd === 1384) {
+          setCurrentScreen('BedTurnover');
+        } else {
+          setCurrentScreen('Dashboard');
+        }
       } else {
         console.log('Access denied for submodule:', subModule.SubModName);
         Alert.alert(
@@ -96,7 +104,11 @@ export default function App() {
       console.warn('Failed to verify user rights, allowing access by default:', err);
       // Fallback: allow access if API is failing/offline
       setSelectedSubModule(subModule);
-      setCurrentScreen('Dashboard');
+      if (subModule.SubModCd === 1384) {
+        setCurrentScreen('BedTurnover');
+      } else {
+        setCurrentScreen('Dashboard');
+      }
     } finally {
       setIsCheckingRights(false);
     }
@@ -122,7 +134,11 @@ export default function App() {
   };
 
   const handleBackToDashboard = () => {
-    setCurrentScreen('Dashboard');
+    if (selectedSubModule?.SubModCd === 1384) {
+      setCurrentScreen('SubModuleSelection');
+    } else {
+      setCurrentScreen('Dashboard');
+    }
   };
 
   const handleNavigateToNotifications = () => {

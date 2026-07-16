@@ -183,7 +183,7 @@ export const BedTurnoverScreen = ({ sessionData, onBack, visible, selectedSubMod
     }
     try {
       const modCd = selectedSubModule?.ModCd ?? 490;
-      const subModCd = selectedSubModule?.SubModCd ?? 1384;
+      const subModCd = 1384; // Bed Turnover module code is always 1384
       console.log(`Checking user rights for Bed Turnover module... ModCd: ${modCd}, SubModCd: ${subModCd}`);
       const rightsRes = await trackerService.checkUserRights(
         sessionData.token,
@@ -194,13 +194,22 @@ export const BedTurnoverScreen = ({ sessionData, onBack, visible, selectedSubMod
       console.log('checkUserRights API Response:', JSON.stringify(rightsRes, null, 2));
       if (rightsRes && rightsRes.success && rightsRes.data) {
         console.log('Loaded user rights:', rightsRes.data);
+        const hasAccess = rightsRes.data.access !== false;
         setUserRights({
-          access: rightsRes.data.access !== false,
+          access: hasAccess,
           Save: rightsRes.data.Save !== false,
           Delete: rightsRes.data.Delete !== false,
           Print: rightsRes.data.Print !== false,
           Authorise: rightsRes.data.Authorise !== false,
         });
+        if (!hasAccess) {
+          Alert.alert(
+            'Access Denied',
+            'You do not have permission to access the Bed Turnover module.',
+            [{ text: 'OK', onPress: () => onBack() }]
+          );
+          return;
+        }
       }
     } catch (err) {
       console.warn('Failed to load user rights, allowing access by default:', err);
