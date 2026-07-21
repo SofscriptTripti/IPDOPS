@@ -151,7 +151,7 @@ export const LoginScreen = ({ onLoginSuccess }: LoginScreenProps) => {
             
             <View style={styles.badge}>
               <PinIcon color="#ffffff" />
-              <Text style={styles.badgeText}>Powered by SOFSCRIPT PVT LTD</Text>
+              <Text style={styles.badgeText}>Powered by Sofscript Systems & Services Limited</Text>
              
             </View>
           </View>
