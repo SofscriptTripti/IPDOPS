@@ -152,6 +152,7 @@ export const PatientTimelineScreen = ({
   const [isChatModalVisible, setIsChatModalVisible] = useState(false);
   const [activePatient, setActivePatient] = useState<PatientSessionDetails>(patient);
   const [isLoading, setIsLoading] = useState(!hasLoadedOnce);
+  const [isFetchingLive, setIsFetchingLive] = useState(true);
 
   // Draggable Floating Chat Button Setup
   const pan = useRef(new Animated.ValueXY()).current;
@@ -318,6 +319,7 @@ export const PatientTimelineScreen = ({
 
   useEffect(() => {
     const fetchLiveDetail = async () => {
+      setIsFetchingLive(true);
       if (!hasLoadedOnce) {
         setIsLoading(true);
       }
@@ -501,12 +503,15 @@ export const PatientTimelineScreen = ({
 
             const status = p?.DschgStatus || 'Admitted';
 
-            let statusDetail = 'On track';
-            if (p?.OverallRisk === 2) {
+            let statusDetail = '';
+            if (p?.OverallRisk === 2 || p?.OverallRisk === '2') {
               statusDetail = 'Delayed';
-            } else if (p?.OverallRisk === 1) {
+            } else if (p?.OverallRisk === 1 || p?.OverallRisk === '1') {
               statusDetail = 'At risk';
+            } else if (p?.OverallRisk === 0 || p?.OverallRisk === '0') {
+              statusDetail = 'On track';
             }
+            console.log("here is status>>>>>", statusDetail);
 
             let dateRangeText = 'T1 - Advice Pending';
             if (p?.DschgAdvGivenTm) {
@@ -519,7 +524,7 @@ export const PatientTimelineScreen = ({
             const mappedDetails: PatientSessionDetails = {
               id: p?.IPNo ? String(p.IPNo) : patient.id,
               name: p?.PatientName || patient.name,
-              ipNo: p?.IPNo ? `IP ${p.IPNo}` : patient.ipNo,
+              ipNo: p?.IPNo ? String(p?.IPNo) : patient.ipNo,
               bed: p?.BedNo ? `Bed ${p.BedNo}` : patient.bed,
               ward: p?.Ward || patient.ward,
               speciality: p?.Splty_Cd || p?.Speciality || patient.speciality,
@@ -543,6 +548,7 @@ export const PatientTimelineScreen = ({
         console.warn('Failed to load live timeline details, using fallback details:', err);
       } finally {
         setIsLoading(false);
+        setIsFetchingLive(false);
         onLoadedOnce();
       }
     };
@@ -554,10 +560,10 @@ export const PatientTimelineScreen = ({
   const isOutOfTAT = activePatient.statusDetail === 'Out of TAT' || activePatient.statusDetail === 'Delayed';
   const isAtRisk = activePatient.statusDetail === 'At risk';
   
-  const tatBg = isOutOfTAT ? '#fef2f2' : isAtRisk ? '#fffbeb' : '#f0fdf4';
-  const tatBorder = isOutOfTAT ? '#fee2e2' : isAtRisk ? '#fef3c7' : '#dcfce7';
-  const tatText = isOutOfTAT ? '#ef4444' : isAtRisk ? '#f59e0b' : '#22c55e';
-  const tatLabel = isOutOfTAT ? 'Out of TAT range' : isAtRisk ? 'At risk' : 'Within TAT';
+  const tatBg = isFetchingLive ? '#f8fafc' : isOutOfTAT ? '#fef2f2' : isAtRisk ? '#fffbeb' : '#f0fdf4';
+  const tatBorder = isFetchingLive ? '#e2e8f0' : isOutOfTAT ? '#fee2e2' : isAtRisk ? '#fef3c7' : '#dcfce7';
+  const tatText = isFetchingLive ? '#64748b' : isOutOfTAT ? '#ef4444' : isAtRisk ? '#f59e0b' : '#22c55e';
+  const tatLabel = isFetchingLive ? '-' : isOutOfTAT ? 'Out of TAT range' : isAtRisk ? 'At risk' : 'Within TAT';
 
   if (isLoading) {
     return (
@@ -604,9 +610,16 @@ export const PatientTimelineScreen = ({
         
         {/* Top Info Section: Left (Details Card) */}
         <View style={styles.patientDetailsCard}>
-          <Text style={styles.patientName} numberOfLines={2}>
-            {activePatient.name}
-          </Text>
+          <View style={styles.patientNameRow}>
+            <Text style={styles.patientName} numberOfLines={1}>
+              {activePatient.name}
+            </Text>
+            {activePatient.ipNo ? (
+              <Text style={styles.patientIpBadge}>
+                {activePatient.ipNo.startsWith('IP') ? activePatient.ipNo : `IP ${activePatient.ipNo}`}
+              </Text>
+            ) : null}
+          </View>
 
           {/* Overall TAT Badge */}
           <View style={[styles.overallTatBadge, { backgroundColor: tatBg, borderColor: tatBorder }]}>
@@ -1084,11 +1097,29 @@ const styles = StyleSheet.create({
       },
     }),
   },
+  patientNameRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 14,
+    width: '100%',
+  },
   patientName: {
     fontSize: 18,
     fontWeight: '800',
     color: THEME.colors.textDark,
-    marginBottom: 14,
+    flex: 1,
+    marginRight: 12,
+  },
+  patientIpBadge: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0369a1',
+    backgroundColor: '#e0f2fe',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    overflow: 'hidden',
   },
   overallTatBadge: {
     flexDirection: 'row',

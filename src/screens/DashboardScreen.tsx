@@ -454,12 +454,13 @@ export const DashboardScreen = ({
 
           const status = p.DschgStatus || 'Admitted';
 
-          let statusDetail = 'On track';
+          let statusDetail = '';
           if (p.OverallRisk === 2) {
-            statusDetail = 'Delayed';
+            statusDetail = '';
           } else if (p.OverallRisk === 1) {
-            statusDetail = 'At risk';
+            statusDetail = '';
           }
+          console.log("here is status>>>>>", statusDetail);
 
           let dateRangeText = 'T1 - Advice Pending';
           if (p.DschgAdvGivenTm) {
@@ -472,7 +473,7 @@ export const DashboardScreen = ({
           return {
             id: p.IPNo ? String(p.IPNo) : String(idx),
             name: p.PatientName || 'PATIENT',
-            ipNo: p.IPNo ? `IP ${p.IPNo}` : '',
+            ipNo: p.IPNo ? String(p.IPNo) : '',
             bed: p.BedNo ? `Bed ${p.BedNo}` : '',
             ward: p.Ward || 'WARD',
             speciality: p.Speciality || 'MEDICINE',
@@ -859,13 +860,13 @@ export const DashboardScreen = ({
         </View>
 
         {/* Status Label Line */}
-        <View style={styles.statusLabelRow}>
+        {/* <View style={styles.statusLabelRow}>
           <Text style={styles.patientsCount}>{filteredPatients.length} patients</Text>
           <View style={styles.liveIndicatorContainer}>
             <PulsingDot />
             <Text style={styles.liveText}>Live</Text>
           </View>
-        </View>
+        </View> */}
 
         {/* Patients list */}
         {isFetchingTracker ? (
@@ -880,7 +881,9 @@ export const DashboardScreen = ({
           filteredPatients.map((patient) => {
             const statusColor = 
               patient.statusDetail === 'On track' ? THEME.colors.success : 
-              patient.statusDetail === 'At risk' ? THEME.colors.warning : THEME.colors.danger;
+              patient.statusDetail === 'At risk' ? THEME.colors.warning : 
+              patient.statusDetail === 'Delayed' ? THEME.colors.danger : 
+              'transparent';
               
             const badgeBg = patient.status === 'Discharged' ? THEME.colors.successBg : '#e0f2fe';
             const badgeText = patient.status === 'Discharged' ? THEME.colors.success : '#0369a1';
@@ -930,12 +933,14 @@ export const DashboardScreen = ({
 
                 <View style={styles.patientCardFooter}>
                   <Text style={styles.patientDateText}>{patient.dateRange}</Text>
-                  <View style={styles.detailStatusContainer}>
-                    <View style={[styles.detailStatusDot, { backgroundColor: statusColor }]} />
-                    <Text style={[styles.detailStatusText, { color: statusColor }]}>
-                      {patient.statusDetail}
-                    </Text>
-                  </View>
+                  {patient.statusDetail ? (
+                    <View style={styles.detailStatusContainer}>
+                      <View style={[styles.detailStatusDot, { backgroundColor: statusColor }]} />
+                      <Text style={[styles.detailStatusText, { color: statusColor }]}>
+                        {patient.statusDetail}
+                      </Text>
+                    </View>
+                  ) : null}
                 </View>
               </TouchableOpacity>
             );
