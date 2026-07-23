@@ -455,10 +455,15 @@ export const DashboardScreen = ({
           const status = p.DschgStatus || 'Admitted';
 
           let statusDetail = '';
-          if (p.OverallRisk === 2) {
-            statusDetail = '';
-          } else if (p.OverallRisk === 1) {
-            statusDetail = '';
+          const riskVal = p.OverallRisk !== undefined && p.OverallRisk !== null ? Number(p.OverallRisk) : 0;
+          if (riskVal === 0) {
+            statusDetail = 'Pending';
+          } else if (riskVal === 1) {
+            statusDetail = 'On Track';
+          } else if (riskVal === 2) {
+            statusDetail = 'Risk';
+          } else if (riskVal === 3) {
+            statusDetail = 'Delay';
           }
           console.log("here is status>>>>>", statusDetail);
 
@@ -880,9 +885,10 @@ export const DashboardScreen = ({
         ) : (
           filteredPatients.map((patient) => {
             const statusColor = 
-              patient.statusDetail === 'On track' ? THEME.colors.success : 
-              patient.statusDetail === 'At risk' ? THEME.colors.warning : 
-              patient.statusDetail === 'Delayed' ? THEME.colors.danger : 
+              patient.statusDetail === 'On Track' ? THEME.colors.success : 
+              patient.statusDetail === 'Risk' ? THEME.colors.warning : 
+              patient.statusDetail === 'Delay' ? THEME.colors.danger : 
+              patient.statusDetail === 'Pending' ? THEME.colors.textMuted : 
               'transparent';
               
             const badgeBg = patient.status === 'Discharged' ? THEME.colors.successBg : '#e0f2fe';

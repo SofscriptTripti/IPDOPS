@@ -504,12 +504,15 @@ export const PatientTimelineScreen = ({
             const status = p?.DschgStatus || 'Admitted';
 
             let statusDetail = '';
-            if (p?.OverallRisk === 2 || p?.OverallRisk === '2') {
-              statusDetail = 'Delayed';
-            } else if (p?.OverallRisk === 1 || p?.OverallRisk === '1') {
-              statusDetail = 'At risk';
-            } else if (p?.OverallRisk === 0 || p?.OverallRisk === '0') {
-              statusDetail = 'On track';
+            const riskVal = p?.OverallRisk !== undefined && p?.OverallRisk !== null ? Number(p.OverallRisk) : 0;
+            if (riskVal === 0) {
+              statusDetail = 'Pending';
+            } else if (riskVal === 1) {
+              statusDetail = 'On Track';
+            } else if (riskVal === 2) {
+              statusDetail = 'Risk';
+            } else if (riskVal === 3) {
+              statusDetail = 'Delay';
             }
             console.log("here is status>>>>>", statusDetail);
 
@@ -533,7 +536,7 @@ export const PatientTimelineScreen = ({
               totalStages: 13,
               dateRange: dateRangeText,
               status,
-              statusDetail,
+              statusDetail: patient.statusDetail,
               paymentBy: p?.PtnPayTyp || patient.paymentBy,
               patientType: p?.PatientType || patient.patientType,
               stages: formattedStages,
@@ -557,13 +560,50 @@ export const PatientTimelineScreen = ({
   }, [patient, sessionData]);
 
   // Map status colors for TAT overall badge
-  const isOutOfTAT = activePatient.statusDetail === 'Out of TAT' || activePatient.statusDetail === 'Delayed';
-  const isAtRisk = activePatient.statusDetail === 'At risk';
-  
-  const tatBg = isFetchingLive ? '#f8fafc' : isOutOfTAT ? '#fef2f2' : isAtRisk ? '#fffbeb' : '#f0fdf4';
-  const tatBorder = isFetchingLive ? '#e2e8f0' : isOutOfTAT ? '#fee2e2' : isAtRisk ? '#fef3c7' : '#dcfce7';
-  const tatText = isFetchingLive ? '#64748b' : isOutOfTAT ? '#ef4444' : isAtRisk ? '#f59e0b' : '#22c55e';
-  const tatLabel = isFetchingLive ? '-' : isOutOfTAT ? 'Out of TAT range' : isAtRisk ? 'At risk' : 'Within TAT';
+  const isPending = activePatient.statusDetail === 'Pending';
+  const isOnTrack = activePatient.statusDetail === 'On Track';
+  const isRisk = activePatient.statusDetail === 'Risk';
+  const isDelay = activePatient.statusDetail === 'Delay';
+
+  const tatBg = isFetchingLive 
+    ? '#f8fafc' 
+    : isPending 
+    ? '#f1f5f9' 
+    : isOnTrack 
+    ? '#f0fdf4' 
+    : isRisk 
+    ? '#fffbeb' 
+    : isDelay 
+    ? '#fef2f2' 
+    : '#f8fafc';
+
+  const tatBorder = isFetchingLive 
+    ? '#e2e8f0' 
+    : isPending 
+    ? '#cbd5e1' 
+    : isOnTrack 
+    ? '#dcfce7' 
+    : isRisk 
+    ? '#fef3c7' 
+    : isDelay 
+    ? '#fee2e2' 
+    : '#e2e8f0';
+
+  const tatText = isFetchingLive 
+    ? '#64748b' 
+    : isPending 
+    ? '#64748b' 
+    : isOnTrack 
+    ? '#22c55e' 
+    : isRisk 
+    ? '#f59e0b' 
+    : isDelay 
+    ? '#ef4444' 
+    : '#64748b';
+
+  const tatLabel = isFetchingLive 
+    ? '-' 
+    : activePatient.statusDetail || 'Pending';
 
   if (isLoading) {
     return (

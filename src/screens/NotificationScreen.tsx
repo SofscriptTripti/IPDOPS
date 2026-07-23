@@ -155,6 +155,7 @@ export const NotificationScreen = ({ onBack }: NotificationScreenProps) => {
           </TouchableOpacity>
         )}
       </View>
+      
 
       {/* Tabs Control */}
       {notifications.length > 0 && (
