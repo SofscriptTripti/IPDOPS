@@ -46,262 +46,10 @@ interface DashboardScreenProps {
   onNavigateToBedTurnover: () => void;
   onNavigateToTimeline: (patient: PatientSessionDetails) => void;
   onNavigateToNotifications: () => void;
+  onBackToSubModuleSelection: () => void;
 }
 
 const mockPatients: PatientSessionDetails[] = [];
-const dummyPatients = [
-  {
-    id: '1',
-    name: 'MR. KRISHNA DAS PAL',
-    ipNo: 'IP 3114828',
-    bed: 'Bed 607B',
-    ward: 'DOUBLE OCC. - 6TH FLR.',
-    speciality: 'UROLOGY',
-    doctor: 'DR. BHUSHAN P. PATIL',
-    stageProgress: 4,
-    totalStages: 13,
-    dateRange: 'T1 - 05/05 13:58',
-    status: 'Admitted',
-    statusDetail: 'Delayed',
-    paymentBy: 'STAR HEALTH INSURANCE',
-    patientType: 'CREDIT COMPANY PATIENT',
-    stages: [
-      { code: 'T1', name: 'Discharge Advice', time: '04/05 10:00', status: 'green' },
-      { code: 'T2', name: 'Last Issue Request (Nurse Station)', time: '04/05 10:25', diffText: '0:25 vs T1', status: 'red', tatLimit: 'TAT ≤ 1:00' },
-      { code: 'T3', name: 'Last Issue by Pharmacy', time: '04/05 10:45', diffText: '0:45 vs T1', status: 'green', tatLimit: 'TAT ≤ 1:30' },
-      { code: 'T4', name: 'Last Issue Return Request (Nurse)', time: '04/05 11:15', diffText: '1:15 vs T1', status: 'red', tatLimit: 'TAT ≤ 2:00' },
-    ]
-  },
-  {
-    id: '2',
-    name: 'MR. ASHISH N NABAR',
-    ipNo: 'IP 3116083',
-    bed: 'Bed 511B',
-    ward: 'GENERAL WARD - 5TH FLR.',
-    speciality: 'GENERAL MEDICINE',
-    doctor: 'DR. SANGEETA CHINCHOLE',
-    stageProgress: 5,
-    totalStages: 13,
-    dateRange: 'T1 - 05/05 13:34',
-    status: 'Admitted',
-    statusDetail: 'On track',
-    paymentBy: 'CASH',
-    patientType: 'SELF PAYING',
-    stages: [
-      { code: 'T1', name: 'Discharge Advice', time: '04/05 11:00', status: 'green' },
-      { code: 'T2', name: 'Last Issue Request (Nurse Station)', time: '04/05 11:30', diffText: '0:30 vs T1', status: 'green', tatLimit: 'TAT ≤ 1:00' },
-      { code: 'T3', name: 'Last Issue by Pharmacy', time: '04/05 12:00', diffText: '1:00 vs T1', status: 'green', tatLimit: 'TAT ≤ 1:30' },
-      { code: 'T4', name: 'Last Issue Return Request (Nurse)', time: '04/05 12:20', diffText: '1:20 vs T1', status: 'green', tatLimit: 'TAT ≤ 2:00' },
-      { code: 'T5', name: 'Last Issue Return by Pharmacy', time: '04/05 12:45', diffText: '1:45 vs T1', status: 'green', tatLimit: 'TAT ≤ 2:00' },
-    ]
-  },
-  {
-    id: '3',
-    name: 'MR. JAMES PAWAR',
-    ipNo: 'IP 3115084',
-    bed: 'Bed 610B',
-    ward: 'GENERAL WARD - 6TH FLR.',
-    speciality: 'GENERAL MEDICINE',
-    doctor: 'DR. SANGEETA CHINCHOLE',
-    stageProgress: 7,
-    totalStages: 13,
-    dateRange: 'T1 - 05/05 13:30',
-    status: 'Admitted',
-    statusDetail: 'On track',
-    paymentBy: 'HDFC ERGO TPA',
-    patientType: 'CREDIT COMPANY PATIENT',
-    stages: [
-      { code: 'T1', name: 'Discharge Advice', time: '04/05 10:00', status: 'green' },
-      { code: 'T2', name: 'Last Issue Request (Nurse Station)', time: '04/05 10:20', diffText: '0:20 vs T1', status: 'green', tatLimit: 'TAT ≤ 1:00' },
-      { code: 'T3', name: 'Last Issue by Pharmacy', time: '04/05 10:40', diffText: '0:40 vs T1', status: 'green', tatLimit: 'TAT ≤ 1:30' },
-      { code: 'T4', name: 'Last Issue Return Request (Nurse)', time: '04/05 11:00', diffText: '1:00 vs T1', status: 'green', tatLimit: 'TAT ≤ 2:00' },
-      { code: 'T5', name: 'Last Issue Return by Pharmacy', time: '04/05 11:20', diffText: '1:20 vs T1', status: 'green', tatLimit: 'TAT ≤ 2:00' },
-      { code: 'T6', name: 'Visitsheet / Voucher to Billing', time: '04/05 11:40', diffText: '1:40 vs T1', status: 'green', tatLimit: 'TAT ≤ 2:00' },
-      { code: 'T7', name: 'Discharge Summary (Provisional)', time: '04/05 11:55', diffText: '1:55 vs T1', status: 'green', tatLimit: 'TAT ≤ 1:30' },
-    ]
-  },
-  {
-    id: '4',
-    name: 'MR. MAYUR KISAN MADVI',
-    ipNo: 'IP 3115079',
-    bed: 'Bed 603',
-    ward: 'GENERAL WARD - 6TH FLR.',
-    speciality: 'GENERAL MEDICINE',
-    doctor: 'DR. SANGEETA CHINCHOLE',
-    stageProgress: 7,
-    totalStages: 13,
-    dateRange: 'T1 - 05/05 13:18',
-    status: 'Admitted',
-    statusDetail: 'Delayed',
-    paymentBy: 'CASH',
-    patientType: 'SELF PAYING',
-    stages: [
-      { code: 'T1', name: 'Discharge Advice', time: '04/05 10:00', status: 'green' },
-      { code: 'T2', name: 'Last Issue Request (Nurse Station)', time: '04/05 10:35', diffText: '0:35 vs T1', status: 'red', tatLimit: 'TAT ≤ 1:00' },
-      { code: 'T3', name: 'Last Issue by Pharmacy', time: '04/05 10:55', diffText: '0:55 vs T1', status: 'green', tatLimit: 'TAT ≤ 1:30' },
-      { code: 'T4', name: 'Last Issue Return Request (Nurse)', time: '04/05 11:25', diffText: '1:25 vs T1', status: 'red', tatLimit: 'TAT ≤ 2:00' },
-      { code: 'T5', name: 'Last Issue Return by Pharmacy', time: '04/05 11:45', diffText: '1:45 vs T1', status: 'green', tatLimit: 'TAT ≤ 2:00' },
-      { code: 'T6', name: 'Visitsheet / Voucher to Billing', time: '04/05 12:15', diffText: '2:15 vs T1', status: 'red', tatLimit: 'TAT ≤ 2:00' },
-      { code: 'T7', name: 'Discharge Summary (Provisional)', time: '04/05 12:30', diffText: '2:30 vs T1', status: 'green', tatLimit: 'TAT ≤ 1:30' },
-    ]
-  },
-  {
-    id: '5',
-    name: 'MR. RAVINDRA S DESHMUKH',
-    ipNo: 'IP 3114710',
-    bed: 'Bed 305A',
-    ward: 'DOUBLE OCC. - 3RD FLR.',
-    speciality: 'CARDIOLOGY',
-    doctor: 'DR. AMIT KULKARNI',
-    stageProgress: 13,
-    totalStages: 13,
-    dateRange: 'T1 - 04/05 10:00',
-    status: 'Discharged',
-    statusDetail: 'Delayed',
-    paymentBy: 'STAR HEALTH INSURANCE',
-    patientType: 'CREDIT COMPANY PATIENT',
-    stages: [
-      { code: 'T1', name: 'Discharge Advice', time: '04/05 10:00', status: 'green' },
-      { code: 'T2', name: 'Last Issue Request (Nurse Station)', time: '04/05 10:25', diffText: '0:25 vs T1', status: 'green', tatLimit: 'TAT ≤ 1:00' },
-      { code: 'T3', name: 'Last Issue by Pharmacy', time: '04/05 10:45', diffText: '0:45 vs T1', status: 'green', tatLimit: 'TAT ≤ 1:30' },
-      { code: 'T4', name: 'Last Issue Return Request (Nurse)', time: '04/05 11:15', diffText: '1:15 vs T1', status: 'green', tatLimit: 'TAT ≤ 2:00' },
-      { code: 'T5', name: 'Last Issue Return by Pharmacy', time: '04/05 11:35', diffText: '1:35 vs T1', status: 'green', tatLimit: 'TAT ≤ 2:00' },
-      { code: 'T6', name: 'Visitsheet / Voucher to Billing', time: '04/05 11:56', diffText: '1:56 vs T1', status: 'orange', tatLimit: 'TAT ≤ 2:00' },
-      { code: 'T7', name: 'Discharge Summary (Provisional)', time: '04/05 11:00', diffText: '1:00 vs T1', status: 'green', tatLimit: 'TAT ≤ 1:30' },
-      { code: 'T8', name: 'Discharge Summary (Final)', time: '04/05 11:30', diffText: '1:30 vs T1', status: 'green', tatLimit: 'TAT ≤ 2:00' },
-      { code: 'T9', name: 'Discharge Bill Preparation', time: '04/05 12:00', diffText: '2:00 vs T1', status: 'green', tatLimit: 'TAT ≤ 2:30' },
-      { code: 'T10', name: 'Discharge Bill Approval', time: '04/05 12:15', diffText: '2:15 vs T1', status: 'green', tatLimit: 'TAT ≤ 3:00' },
-      { code: 'T11', name: 'Bill Handed to Patient/Sponsor', time: '04/05 12:30', diffText: '2:30 vs T1', status: 'green', tatLimit: 'TAT ≤ 3:30' },
-      { code: 'T12', name: 'Payment Receipt/Gatepass Issued', time: '04/05 12:45', diffText: '2:45 vs T1', status: 'green', tatLimit: 'TAT ≤ 4:00' },
-      { code: 'T13', name: 'Bed Vacated/Ready', time: '04/05 13:00', diffText: '3:00 vs T1', status: 'green', tatLimit: 'TAT ≤ 4:30' },
-    ]
-  },
-  {
-    id: '6',
-    name: 'MRS. JALAJA NAIR',
-    ipNo: 'IP 3114935',
-    bed: 'Bed 405B',
-    ward: 'GENERAL WARD - 4TH FLR.',
-    speciality: 'GYNAECOLOGY & OBSTETRICS',
-    doctor: 'DR. SUSHMA GUNJAL',
-    stageProgress: 7,
-    totalStages: 13,
-    dateRange: 'T1 - 05/05 12:49',
-    status: 'Admitted',
-    statusDetail: 'Delayed',
-    paymentBy: 'STAR HEALTH INSURANCE',
-    patientType: 'CREDIT COMPANY PATIENT',
-    stages: [
-      { code: 'T1', name: 'Discharge Advice', time: '04/05 09:30', status: 'green' },
-      { code: 'T2', name: 'Last Issue Request (Nurse Station)', time: '04/05 10:10', diffText: '0:40 vs T1', status: 'red', tatLimit: 'TAT ≤ 1:00' },
-      { code: 'T3', name: 'Last Issue by Pharmacy', time: '04/05 10:50', diffText: '1:20 vs T1', status: 'red', tatLimit: 'TAT ≤ 1:30' },
-      { code: 'T4', name: 'Last Issue Return Request (Nurse)', time: '04/05 11:10', diffText: '1:40 vs T1', status: 'green', tatLimit: 'TAT ≤ 2:00' },
-      { code: 'T5', name: 'Last Issue Return by Pharmacy', time: '04/05 11:40', diffText: '2:10 vs T1', status: 'red', tatLimit: 'TAT ≤ 2:00' },
-      { code: 'T6', name: 'Visitsheet / Voucher to Billing', time: '04/05 12:10', diffText: '2:40 vs T1', status: 'red', tatLimit: 'TAT ≤ 2:00' },
-      { code: 'T7', name: 'Discharge Summary (Provisional)', time: '04/05 12:30', diffText: '3:00 vs T1', status: 'green', tatLimit: 'TAT ≤ 1:30' },
-    ]
-  },
-  {
-    id: '7',
-    name: 'MRS. JAISHRI KAMALAKAR',
-    ipNo: 'IP 3115091',
-    bed: 'Bed 401',
-    ward: 'GENERAL WARD - 4TH FLR.',
-    speciality: 'GYNAECOLOGY & OBSTETRICS',
-    doctor: 'DR. SUSHMA GUNJAL',
-    stageProgress: 8,
-    totalStages: 13,
-    dateRange: 'T1 - 05/05 12:35',
-    status: 'Admitted',
-    statusDetail: 'On track',
-    paymentBy: 'CASH',
-    patientType: 'SELF PAYING',
-    stages: [
-      { code: 'T1', name: 'Discharge Advice', time: '04/05 10:00', status: 'green' },
-      { code: 'T2', name: 'Last Issue Request (Nurse Station)', time: '04/05 10:20', diffText: '0:20 vs T1', status: 'green', tatLimit: 'TAT ≤ 1:00' },
-      { code: 'T3', name: 'Last Issue by Pharmacy', time: '04/05 10:40', diffText: '0:40 vs T1', status: 'green', tatLimit: 'TAT ≤ 1:30' },
-      { code: 'T4', name: 'Last Issue Return Request (Nurse)', time: '04/05 11:00', diffText: '1:00 vs T1', status: 'green', tatLimit: 'TAT ≤ 2:00' },
-      { code: 'T5', name: 'Last Issue Return by Pharmacy', time: '04/05 11:15', diffText: '1:15 vs T1', status: 'green', tatLimit: 'TAT ≤ 2:00' },
-      { code: 'T6', name: 'Visitsheet / Voucher to Billing', time: '04/05 11:35', diffText: '1:35 vs T1', status: 'green', tatLimit: 'TAT ≤ 2:00' },
-      { code: 'T7', name: 'Discharge Summary (Provisional)', time: '04/05 11:55', diffText: '1:55 vs T1', status: 'green', tatLimit: 'TAT ≤ 1:30' },
-      { code: 'T8', name: 'Discharge Summary (Final)', time: '04/05 12:15', diffText: '2:15 vs T1', status: 'green', tatLimit: 'TAT ≤ 2:00' },
-    ]
-  },
-  {
-    id: '8',
-    name: 'MR. AMIT PATEL',
-    ipNo: 'IP 3114999',
-    bed: 'Bed 302C',
-    ward: 'DOUBLE OCC. - 3RD FLR.',
-    speciality: 'CARDIOLOGY',
-    doctor: 'DR. AMIT KULKARNI',
-    stageProgress: 3,
-    totalStages: 13,
-    dateRange: 'T1 - 05/05 15:40',
-    status: 'Admitted',
-    statusDetail: 'On track',
-    paymentBy: 'ICICI LOMBARD',
-    patientType: 'CREDIT COMPANY PATIENT',
-    stages: [
-      { code: 'T1', name: 'Discharge Advice', time: '04/05 14:15', status: 'green' },
-      { code: 'T2', name: 'Last Issue Request (Nurse Station)', time: '04/05 14:40', diffText: '0:25 vs T1', status: 'green', tatLimit: 'TAT ≤ 1:00' },
-      { code: 'T3', name: 'Last Issue by Pharmacy', time: '04/05 15:00', diffText: '0:45 vs T1', status: 'green', tatLimit: 'TAT ≤ 1:30' },
-    ]
-  },
-  {
-    id: '9',
-    name: 'MR. SANJAY SHINDE',
-    ipNo: 'IP 3115201',
-    bed: 'Bed 508A',
-    ward: 'GENERAL WARD - 5TH FLR.',
-    speciality: 'ORTHOPAEDICS',
-    doctor: 'DR. ROHIT K.',
-    stageProgress: 11,
-    totalStages: 13,
-    dateRange: 'T1 - 05/05 08:30',
-    status: 'Out of TAT',
-    statusDetail: 'Delayed',
-    paymentBy: 'CASH',
-    patientType: 'SELF PAYING',
-    stages: [
-      { code: 'T1', name: 'Discharge Advice', time: '04/05 08:30', status: 'green' },
-      { code: 'T2', name: 'Last Issue Request (Nurse Station)', time: '04/05 09:00', diffText: '0:30 vs T1', status: 'green', tatLimit: 'TAT ≤ 1:00' },
-      { code: 'T3', name: 'Last Issue by Pharmacy', time: '04/05 09:20', diffText: '0:50 vs T1', status: 'green', tatLimit: 'TAT ≤ 1:30' },
-      { code: 'T4', name: 'Last Issue Return Request (Nurse)', time: '04/05 09:50', diffText: '1:20 vs T1', status: 'green', tatLimit: 'TAT ≤ 2:00' },
-      { code: 'T5', name: 'Last Issue Return by Pharmacy', time: '04/05 10:10', diffText: '1:40 vs T1', status: 'green', tatLimit: 'TAT ≤ 2:00' },
-      { code: 'T6', name: 'Visitsheet / Voucher to Billing', time: '04/05 10:50', diffText: '2:20 vs T1', status: 'red', tatLimit: 'TAT ≤ 2:00' },
-      { code: 'T7', name: 'Discharge Summary (Provisional)', time: '04/05 10:30', diffText: '2:00 vs T1', status: 'green', tatLimit: 'TAT ≤ 1:30' },
-      { code: 'T8', name: 'Discharge Summary (Final)', time: '04/05 11:00', diffText: '2:30 vs T1', status: 'green', tatLimit: 'TAT ≤ 2:00' },
-      { code: 'T9', name: 'Discharge Bill Preparation', time: '04/05 11:30', diffText: '3:00 vs T1', status: 'green', tatLimit: 'TAT ≤ 2:30' },
-      { code: 'T10', name: 'Discharge Bill Approval', time: '04/05 11:45', diffText: '3:15 vs T1', status: 'green', tatLimit: 'TAT ≤ 3:00' },
-      { code: 'T11', name: 'Bill Handed to Patient/Sponsor', time: '04/05 12:15', diffText: '3:45 vs T1', status: 'red', tatLimit: 'TAT ≤ 3:30' },
-    ]
-  },
-  {
-    id: '10',
-    name: 'MRS. ANITA DESAI',
-    ipNo: 'IP 3115042',
-    bed: 'Bed 514B',
-    ward: 'GENERAL WARD - 5TH FLR.',
-    speciality: 'NEUROLOGY',
-    doctor: 'DR. NIKHIL D. KADAM',
-    stageProgress: 6,
-    totalStages: 13,
-    dateRange: 'T1 - 05/05 10:50',
-    status: 'Admitted',
-    statusDetail: 'At risk',
-    paymentBy: 'BAJAJ ALLIANZ',
-    patientType: 'CREDIT COMPANY PATIENT',
-    stages: [
-      { code: 'T1', name: 'Discharge Advice', time: '04/05 10:50', status: 'green' },
-      { code: 'T2', name: 'Last Issue Request (Nurse Station)', time: '04/05 11:20', diffText: '0:30 vs T1', status: 'green', tatLimit: 'TAT ≤ 1:00' },
-      { code: 'T3', name: 'Last Issue by Pharmacy', time: '04/05 12:00', diffText: '1:10 vs T1', status: 'orange', tatLimit: 'TAT ≤ 1:30' },
-      { code: 'T4', name: 'Last Issue Return Request (Nurse)', time: '04/05 12:20', diffText: '1:30 vs T1', status: 'green', tatLimit: 'TAT ≤ 2:00' },
-      { code: 'T5', name: 'Last Issue Return by Pharmacy', time: '04/05 12:40', diffText: '1:50 vs T1', status: 'green', tatLimit: 'TAT ≤ 2:00' },
-      { code: 'T6', name: 'Visitsheet / Voucher to Billing', time: '04/05 13:10', diffText: '2:20 vs T1', status: 'orange', tatLimit: 'TAT ≤ 2:00' },
-    ]
-  }
-];
 
 const PulsingDot = () => {
   const pulseAnim = React.useRef(new Animated.Value(0.4)).current;
@@ -335,6 +83,7 @@ export const DashboardScreen = ({
   onNavigateToBedTurnover,
   onNavigateToTimeline,
   onNavigateToNotifications,
+  onBackToSubModuleSelection,
 }: DashboardScreenProps) => {
   const insets = useSafeAreaInsets();
   
@@ -612,19 +361,23 @@ export const DashboardScreen = ({
       {/* Dashboard Header Bar */}
       <View style={styles.dashboardHeader}>
         <View style={styles.dashboardHeaderLeft}>
-          <View style={styles.dashboardLogoOuter}>
+          <TouchableOpacity 
+            activeOpacity={0.75} 
+            onPress={onBackToSubModuleSelection}
+            style={styles.dashboardLogoOuter}
+          >
             <Image
               source={require('../../assets/careworksone_logo.png')}
               style={styles.dashboardLogo as any}
               resizeMode="cover"
             />
-          </View>
+          </TouchableOpacity>
           <View>
             <Text style={styles.dashboardHospitalText} numberOfLines={1}>
               IPD Ops{selectedSubModule ? `  •  ${selectedSubModule.SubModName}` : ''}
             </Text>
             <Text style={styles.dashboardTitleText} numberOfLines={1}>
-              {sessionData.companyName || 'SOFSCRIPT HOSPITAL MUMBAI'}
+              {sessionData.companyName || null}
             </Text>
           </View>
         </View>

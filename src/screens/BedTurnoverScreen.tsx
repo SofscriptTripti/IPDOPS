@@ -19,6 +19,7 @@ import { UserSessionData } from '../services/authService';
 import { trackerService } from '../services/trackerService';
 import { LoadingIndicator } from '../components/LoadingIndicator';
 import { SubModuleItem } from './SubModuleSelectionScreen';
+import { SearchIcon } from '../components/Icons';
 
 interface BedTurnoverScreenProps {
   sessionData: UserSessionData;
@@ -49,18 +50,22 @@ export const BedTurnoverScreen = ({ sessionData, onBack, visible, selectedSubMod
   // Tab control
   const [activeTab, setActiveTab] = useState<'Pending' | 'Cleaned'>('Pending');
   
-  // Dropdown filter states
-  const [selectedWard, setSelectedWard] = useState<string>('All');
-  const [selectedBedType, setSelectedBedType] = useState<string>('All');
-  const [showWardMenu, setShowWardMenu] = useState(false);
-  const [showBedTypeMenu, setShowBedTypeMenu] = useState(false);
+  // Ward bottom sheet state
+  const [wards, setWards] = useState<any[]>([]);
+  const [selectedWard, setSelectedWard] = useState<{ Cd: number; Dcd: string | null } | null>(null);
+  const [showWardModal, setShowWardModal] = useState(false);
+  const [wardSearchQuery, setWardSearchQuery] = useState('');
 
-  // Dynamic Bed Types state
+  // Bed Type bottom sheet state
   interface BedTypeItem {
     bed_typ_cd: number;
     bed_typ_dcd: string | null;
   }
   const [bedTypes, setBedTypes] = useState<BedTypeItem[]>([]);
+  const [selectedBedType, setSelectedBedType] = useState<{ Cd: number; Dcd: string | null } | null>(null);
+  const [showBedTypeModal, setShowBedTypeModal] = useState(false);
+  const [bedTypeSearchQuery, setBedTypeSearchQuery] = useState('');
+
   const [beds, setBeds] = useState<HousekeepingBed[]>([]);
   const [isLoadingBeds, setIsLoadingBeds] = useState(true);
   const [userRights, setUserRights] = useState<{
@@ -117,9 +122,9 @@ export const BedTurnoverScreen = ({ sessionData, onBack, visible, selectedSubMod
     return {
       id,
       bedNo: item?.BedNo || `Bed ${item?.BedTypCd || ''}`,
-      floorInfo: item?.WrdDcd || 'GENERAL WARD',
-      wardType: item?.bedtypdcd || 'GENERAL WARD',
-      origin: item?.ReqSource || 'DISCHARGE',
+      floorInfo: item?.WrdDcd || '-',
+      wardType: item?.bedtypdcd || '-',
+      origin: item?.ReqSource || '-',
       intimationNo: item?.IntimationNo || '',
       genderType,
       pendingText,
@@ -216,6 +221,27 @@ export const BedTurnoverScreen = ({ sessionData, onBack, visible, selectedSubMod
     }
 
     try {
+      console.log('Fetching Wards data for Bed Turnover filters...');
+      const cocd = sessionData.coCd || "1";
+      const div = sessionData.div || 1;
+      const loc = sessionData.loc || 1;
+      const resWards = await trackerService.getWardList(
+        sessionData.token,
+        cocd,
+        div,
+        loc,
+        sessionData.userId
+      );
+      if (resWards && resWards.success && Array.isArray(resWards.data)) {
+        const validWards = resWards.data.filter((w: any) => w.Dcd && w.Dcd.trim().length > 0);
+        console.log('Loaded Wards items for Bed Turnover filter:', validWards.length);
+        setWards(validWards);
+      }
+    } catch (err) {
+      console.warn('Failed to load Wards data:', err);
+    }
+
+    try {
       console.log('Fetching Bed Type Master data for filters...');
       const resBedTypes = await trackerService.getBedTypes(sessionData.token);
       if (resBedTypes && resBedTypes.success && Array.isArray(resBedTypes.data)) {
@@ -272,10 +298,24 @@ export const BedTurnoverScreen = ({ sessionData, onBack, visible, selectedSubMod
   const cleanedBeds = beds.filter(b => b.status === 'CLEANED');
 
   const visibleBeds = (activeTab === 'Pending' ? pendingBeds : cleanedBeds).filter(b => {
-    const matchesWard = selectedWard === 'All' || b.wardCategory === selectedWard;
-    const matchesBedType = selectedBedType === 'All' || 
-      b.bedCategory.toLowerCase().includes(selectedBedType.toLowerCase()) || 
-      b.wardType.toLowerCase().includes(selectedBedType.toLowerCase());
+    // 1. Matches Ward
+    let matchesWard = true;
+    if (selectedWard !== null) {
+      const selectedDcd = (selectedWard.Dcd || '').toLowerCase();
+      const bedWrdDcd = (b.floorInfo || '').toLowerCase();
+      const rawWrdCd = b.rawItem?.WrdCd || b.rawItem?.wrd_cd;
+      matchesWard = bedWrdDcd.includes(selectedDcd) || (rawWrdCd !== undefined && String(rawWrdCd) === String(selectedWard.Cd));
+    }
+
+    // 2. Matches Bed Type
+    let matchesBedType = true;
+    if (selectedBedType !== null) {
+      const selectedDcd = (selectedBedType.Dcd || '').toLowerCase();
+      const bedTypDcd = (b.wardType || '').toLowerCase();
+      const rawBedTypCd = b.rawItem?.BedTypCd || b.rawItem?.bed_typ_cd;
+      matchesBedType = bedTypDcd.includes(selectedDcd) || (rawBedTypCd !== undefined && String(rawBedTypCd) === String(selectedBedType.Cd));
+    }
+
     return matchesWard && matchesBedType;
   });
 
@@ -540,29 +580,13 @@ export const BedTurnoverScreen = ({ sessionData, onBack, visible, selectedSubMod
               activeOpacity={0.7} 
               style={styles.dropdownBtn}
               onPress={() => {
-                setShowWardMenu(!showWardMenu);
-                setShowBedTypeMenu(false);
+                setWardSearchQuery('');
+                setShowWardModal(true);
               }}
             >
-              <Text style={styles.dropdownBtnText}>Ward: {selectedWard}</Text>
+              <Text style={styles.dropdownBtnText} numberOfLines={1}>Ward: {selectedWard ? selectedWard.Dcd : 'All'}</Text>
               <Text style={styles.dropdownArrow}>▼</Text>
             </TouchableOpacity>
-            {showWardMenu && (
-              <View style={styles.dropdownMenu}>
-                {['All', '2nd Floor', '3rd Floor', '4th Floor', '5th Floor'].map(w => (
-                  <TouchableOpacity
-                    key={w}
-                    style={styles.menuItem}
-                    onPress={() => {
-                      setSelectedWard(w);
-                      setShowWardMenu(false);
-                    }}
-                  >
-                    <Text style={[styles.menuItemText, selectedWard === w && styles.menuItemTextActive]}>{w}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
           </View>
 
           {/* Bed Type Filter */}
@@ -571,42 +595,13 @@ export const BedTurnoverScreen = ({ sessionData, onBack, visible, selectedSubMod
               activeOpacity={0.7} 
               style={styles.dropdownBtn}
               onPress={() => {
-                setShowBedTypeMenu(!showBedTypeMenu);
-                setShowWardMenu(false);
+                setBedTypeSearchQuery('');
+                setShowBedTypeModal(true);
               }}
             >
-              <Text style={styles.dropdownBtnText}>Bed Type: {selectedBedType}</Text>
+              <Text style={styles.dropdownBtnText} numberOfLines={1}>Bed Type: {selectedBedType ? selectedBedType.Dcd : 'All'}</Text>
               <Text style={styles.dropdownArrow}>▼</Text>
             </TouchableOpacity>
-            {showBedTypeMenu && (
-              <ScrollView style={[styles.dropdownMenu, { maxHeight: 220 }]} nestedScrollEnabled={true}>
-                <TouchableOpacity
-                  style={styles.menuItem}
-                  onPress={() => {
-                    setSelectedBedType('All');
-                    setShowBedTypeMenu(false);
-                  }}
-                >
-                  <Text style={[styles.menuItemText, selectedBedType === 'All' && styles.menuItemTextActive]}>All</Text>
-                </TouchableOpacity>
-
-                {bedTypes.map(t => {
-                  const label = t.bed_typ_dcd || '';
-                  return (
-                    <TouchableOpacity
-                      key={t.bed_typ_cd}
-                      style={styles.menuItem}
-                      onPress={() => {
-                        setSelectedBedType(label);
-                        setShowBedTypeMenu(false);
-                      }}
-                    >
-                      <Text style={[styles.menuItemText, selectedBedType === label && styles.menuItemTextActive]}>{label}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-            )}
           </View>
         </View>
 
@@ -746,6 +741,224 @@ export const BedTurnoverScreen = ({ sessionData, onBack, visible, selectedSubMod
             >
               <Text style={styles.modalCloseBtnText}>OK</Text>
             </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Ward Selector Bottom Sheet Modal */}
+      <Modal
+        visible={showWardModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowWardModal(false)}
+      >
+        <View style={styles.bottomSheetOverlay}>
+          <View style={styles.bottomSheetContent}>
+            <View style={styles.bottomSheetHeader}>
+              <Text style={styles.bottomSheetTitle}>Select Ward</Text>
+              <TouchableOpacity
+                onPress={() => setShowWardModal(false)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Text style={styles.bottomSheetCloseText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Modal Ward Search Input */}
+            <View style={styles.bottomSheetSearchWrapper}>
+              <SearchIcon color={THEME.colors.textMuted} />
+              <TextInput
+                style={styles.bottomSheetSearchInput}
+                placeholder="Search ward name..."
+                placeholderTextColor={THEME.colors.textMuted}
+                value={wardSearchQuery}
+                onChangeText={setWardSearchQuery}
+                autoCapitalize="none"
+              />
+            </View>
+
+            <ScrollView 
+              style={styles.bottomSheetList} 
+              showsVerticalScrollIndicator={true}
+              keyboardShouldPersistTaps="handled"
+            >
+              {wards.length === 0 ? (
+                <View style={{ paddingVertical: 40, alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ color: THEME.colors.textMuted, fontSize: 14, fontWeight: '600' }}>
+                    Loading wards list...
+                  </Text>
+                </View>
+              ) : (
+                <>
+                  {/* Option for All Wards */}
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    style={[
+                      styles.bottomSheetItem,
+                      selectedWard === null && styles.bottomSheetItemActive
+                    ]}
+                    onPress={() => {
+                      setSelectedWard(null);
+                      setShowWardModal(false);
+                    }}
+                  >
+                    <Text style={[
+                      styles.bottomSheetItemText,
+                      selectedWard === null && styles.bottomSheetItemTextActive
+                    ]}>
+                      All Wards
+                    </Text>
+                    {selectedWard === null && (
+                      <Text style={styles.checkmarkIcon}>✓</Text>
+                    )}
+                  </TouchableOpacity>
+
+                  {/* Filtered ward options */}
+                  {wards
+                    .filter(w => {
+                      if (!wardSearchQuery) return true;
+                      return w.Dcd && w.Dcd.toLowerCase().includes(wardSearchQuery.toLowerCase());
+                    })
+                    .map((w) => {
+                      const isSelected = selectedWard?.Cd === w.Cd;
+                      return (
+                        <TouchableOpacity
+                          key={w.Cd}
+                          activeOpacity={0.7}
+                          style={[
+                            styles.bottomSheetItem,
+                            isSelected && styles.bottomSheetItemActive
+                          ]}
+                          onPress={() => {
+                            setSelectedWard(w);
+                            setShowWardModal(false);
+                          }}
+                        >
+                          <Text style={[
+                            styles.bottomSheetItemText,
+                            isSelected && styles.bottomSheetItemTextActive
+                          ]}>
+                            {w.Dcd}
+                          </Text>
+                          {isSelected && (
+                            <Text style={styles.checkmarkIcon}>✓</Text>
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })}
+                </>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Bed Type Selector Bottom Sheet Modal */}
+      <Modal
+        visible={showBedTypeModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowBedTypeModal(false)}
+      >
+        <View style={styles.bottomSheetOverlay}>
+          <View style={styles.bottomSheetContent}>
+            <View style={styles.bottomSheetHeader}>
+              <Text style={styles.bottomSheetTitle}>Select Bed Type</Text>
+              <TouchableOpacity
+                onPress={() => setShowBedTypeModal(false)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Text style={styles.bottomSheetCloseText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Modal Bed Type Search Input */}
+            <View style={styles.bottomSheetSearchWrapper}>
+              <SearchIcon color={THEME.colors.textMuted} />
+              <TextInput
+                style={styles.bottomSheetSearchInput}
+                placeholder="Search bed type..."
+                placeholderTextColor={THEME.colors.textMuted}
+                value={bedTypeSearchQuery}
+                onChangeText={setBedTypeSearchQuery}
+                autoCapitalize="none"
+              />
+            </View>
+
+            <ScrollView 
+              style={styles.bottomSheetList} 
+              showsVerticalScrollIndicator={true}
+              keyboardShouldPersistTaps="handled"
+            >
+              {bedTypes.length === 0 ? (
+                <View style={{ paddingVertical: 40, alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ color: THEME.colors.textMuted, fontSize: 14, fontWeight: '600' }}>
+                    Loading bed types...
+                  </Text>
+                </View>
+              ) : (
+                <>
+                  {/* Option for All Bed Types */}
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    style={[
+                      styles.bottomSheetItem,
+                      selectedBedType === null && styles.bottomSheetItemActive
+                    ]}
+                    onPress={() => {
+                      setSelectedBedType(null);
+                      setShowBedTypeModal(false);
+                    }}
+                  >
+                    <Text style={[
+                      styles.bottomSheetItemText,
+                      selectedBedType === null && styles.bottomSheetItemTextActive
+                    ]}>
+                      All Bed Types
+                    </Text>
+                    {selectedBedType === null && (
+                      <Text style={styles.checkmarkIcon}>✓</Text>
+                    )}
+                  </TouchableOpacity>
+
+                  {/* Filtered bed type options */}
+                  {bedTypes
+                    .filter(t => {
+                      const label = t.bed_typ_dcd || '';
+                      if (!bedTypeSearchQuery) return true;
+                      return label.toLowerCase().includes(bedTypeSearchQuery.toLowerCase());
+                    })
+                    .map((t) => {
+                      const isSelected = selectedBedType?.Cd === t.bed_typ_cd;
+                      const label = t.bed_typ_dcd || '';
+                      return (
+                        <TouchableOpacity
+                          key={t.bed_typ_cd}
+                          activeOpacity={0.7}
+                          style={[
+                            styles.bottomSheetItem,
+                            isSelected && styles.bottomSheetItemActive
+                          ]}
+                          onPress={() => {
+                            setSelectedBedType({ Cd: t.bed_typ_cd, Dcd: label });
+                            setShowBedTypeModal(false);
+                          }}
+                        >
+                          <Text style={[
+                            styles.bottomSheetItemText,
+                            isSelected && styles.bottomSheetItemTextActive
+                          ]}>
+                            {label}
+                          </Text>
+                          {isSelected && (
+                            <Text style={styles.checkmarkIcon}>✓</Text>
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })}
+                </>
+              )}
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -1295,5 +1508,86 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 14,
     fontWeight: '700',
+  },
+  bottomSheetOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    justifyContent: 'flex-end',
+  },
+  bottomSheetContent: {
+    backgroundColor: '#ffffff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '75%',
+    paddingTop: 20,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
+    paddingHorizontal: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
+    elevation: 10,
+  },
+  bottomSheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  bottomSheetTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: THEME.colors.textDark,
+  },
+  bottomSheetCloseText: {
+    fontSize: 14.5,
+    fontWeight: '700',
+    color: THEME.colors.primary,
+  },
+  bottomSheetSearchWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f1f5f9',
+    borderRadius: 10,
+    height: 44,
+    paddingHorizontal: 12,
+    marginBottom: 16,
+  },
+  bottomSheetSearchInput: {
+    flex: 1,
+    paddingLeft: 8,
+    fontSize: 14,
+    color: THEME.colors.textDark,
+    height: '100%',
+  },
+  bottomSheetList: {
+    maxHeight: 350,
+  },
+  bottomSheetItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  bottomSheetItemActive: {
+    borderBottomColor: THEME.colors.primary + '33',
+  },
+  bottomSheetItemText: {
+    fontSize: 14.5,
+    color: THEME.colors.textDark,
+    fontWeight: '500',
+    flex: 1,
+  },
+  bottomSheetItemTextActive: {
+    color: THEME.colors.primary,
+    fontWeight: '800',
+  },
+  checkmarkIcon: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: THEME.colors.primary,
+    marginLeft: 8,
   },
 });

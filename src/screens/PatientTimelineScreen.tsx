@@ -52,6 +52,7 @@ export interface PatientSessionDetails {
   stages: TimelineStage[];
   tpaAprDtTm?: string | null;
   tpaAprAmt?: string | number | null;
+  lastBillPreparedBy?: string | null;
 }
 
 export interface ChatMessage {
@@ -542,6 +543,7 @@ export const PatientTimelineScreen = ({
               stages: formattedStages,
               tpaAprDtTm: p?.LastTPAAprDtTm,
               tpaAprAmt: p?.LastTPAAprAmt,
+              lastBillPreparedBy: p?.LastBillpreparedby || null,
             };
 
             setActivePatient(mappedDetails);
@@ -717,9 +719,10 @@ export const PatientTimelineScreen = ({
               const dotBorderColor = isWhite ? '#cbd5e1' : dotBg;
               const dotBorderWidth = isWhite ? 1.5 : 0;
               const dotTextColor = isWhite ? '#64748b' : '#ffffff';
+              const showTimeRow = stage.code !== 'T6';
               
               return (
-                <View key={stage.code} style={styles.timelineItemRow}>
+                <View key={stage.code} style={[styles.timelineItemRow, { minHeight: showTimeRow ? 66 : 44 }]}>
                   {/* Left Column: Vertical connector line and dot */}
                   <View style={styles.timelineGraphicCol}>
                     <View style={[
@@ -770,18 +773,35 @@ export const PatientTimelineScreen = ({
                       )}
                     </View>
 
-                    <View style={styles.stageTimeRow}>
-                      <Text style={styles.stageTimeText}>{stage.time || '-'}</Text>
-                      {stage.diffText && stage.diffText !== '-' && !stage.diffText.endsWith('= -') ? (
-                        <View style={[styles.diffBadge, { backgroundColor: (stage.status === 'green' || stage.status === 'white') ? 'rgba(34, 197, 94, 0.1)' : 'rgba(234, 88, 12, 0.1)' }]}>
-                          <Text style={[styles.diffBadgeText, { color: (stage.status === 'green' || stage.status === 'white') ? '#16a34a' : '#ea580c' }]}>
-                            {stage.diffText}
-                          </Text>
-                        </View>
-                      ) : (
-                        <Text style={styles.noTatText}>{stage.diffText || '-'}</Text>
-                      )}
-                    </View>
+                    {showTimeRow && (
+                      <View style={styles.stageTimeRow}>
+                        {stage.code === 'T9' ? (
+                          <>
+                            <Text style={styles.stageTimeText}>{stage.time || '-'}</Text>
+                            {activePatient.lastBillPreparedBy ? (
+                              <View style={[styles.diffBadge, { backgroundColor: 'rgba(34, 197, 94, 0.1)' }]}>
+                                <Text style={[styles.diffBadgeText, { color: '#16a34a' }]}>
+                                  {`Prepared By: ${activePatient.lastBillPreparedBy}`}
+                                </Text>
+                              </View>
+                            ) : null}
+                          </>
+                        ) : (
+                          <>
+                            <Text style={styles.stageTimeText}>{stage.time || '-'}</Text>
+                            {stage.diffText && stage.diffText !== '-' && !stage.diffText.endsWith('= -') ? (
+                              <View style={[styles.diffBadge, { backgroundColor: (stage.status === 'green' || stage.status === 'white') ? 'rgba(34, 197, 94, 0.1)' : 'rgba(234, 88, 12, 0.1)' }]}>
+                                <Text style={[styles.diffBadgeText, { color: (stage.status === 'green' || stage.status === 'white') ? '#16a34a' : '#ea580c' }]}>
+                                  {stage.diffText}
+                                </Text>
+                              </View>
+                            ) : (
+                              <Text style={styles.noTatText}>{stage.diffText || '-'}</Text>
+                            )}
+                          </>
+                        )}
+                      </View>
+                    )}
                   </View>
                 </View>
               );
@@ -791,7 +811,7 @@ export const PatientTimelineScreen = ({
 
       </ScrollView>
 
-      {/* Draggable Floating Chat Log Button */}
+      {/* Draggable Floating Chat Log Button - Commented out as requested
       <Animated.View
         {...panResponder.panHandlers}
         style={[
@@ -810,6 +830,7 @@ export const PatientTimelineScreen = ({
           <Text style={styles.floatingChatIcon}>💬</Text>
         </TouchableOpacity>
       </Animated.View>
+      */}
 
       {/* Communication Chat Modal */}
       {false && isChatModalVisible && (

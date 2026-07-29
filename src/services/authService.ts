@@ -15,6 +15,7 @@ export interface UserSessionData {
   financialYear: number;
   shift: number;
   showPasswordToggle: boolean;
+  loginDate?: string;
 }
 
 export interface LoginResponse {

@@ -36,39 +36,6 @@ interface SubModuleSelectionScreenProps {
   onLogout: () => void;
 }
 
-const fallbackSubModules: SubModuleItem[] = [
-  {
-    ModCd: 490,
-    ModName: "Mobile App",
-    Netid: 40730,
-    AppNo: 2,
-    SubModCd: 1383,
-    SubModName: "Ipd Ops",
-    GroupText: "",
-    path: "PatientDataTransfer/patientTransfer/PatientSearch",
-    IsMaster: false,
-    IconFileName: "Mobile.png",
-    colorName: "#528894",
-    apptype: "WEBFORMS",
-    OpenInNewTab: false
-  },
-  {
-    ModCd: 490,
-    ModName: "Mobile App",
-    Netid: 40731,
-    AppNo: 2,
-    SubModCd: 1384,
-    SubModName: "Bed Turn Over",
-    GroupText: "",
-    path: "PatientDataTransfer/patientTransfer/PatientSearch",
-    IsMaster: false,
-    IconFileName: "Mobile.png",
-    colorName: "#528894",
-    apptype: "WEBFORMS",
-    OpenInNewTab: false
-  }
-];
-
 // Helper to get an icon or emoji based on the sub-module name
 const getModuleIcon = (name: string): string => {
   const lowercaseName = name.toLowerCase();
@@ -89,28 +56,35 @@ export const SubModuleSelectionScreen = ({
 }: SubModuleSelectionScreenProps) => {
   const insets = useSafeAreaInsets();
   const [subModules, setSubModules] = useState<SubModuleItem[]>([]);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchSubModules = async () => {
-      try {
-        console.log('Fetching CareWorks submodules for userId:', sessionData.userId);
-        const res = await trackerService.getSubModules(sessionData.token, sessionData.userId);
-        if (res && res.success && Array.isArray(res.data) && res.data.length > 0) {
-          console.log('Successfully fetched submodules:', res.data.length);
-          setSubModules(res.data);
-        } else {
-          console.log('No submodules returned from API, using fallback data');
-          setSubModules(fallbackSubModules);
-        }
-      } catch (err) {
-        console.warn('Failed to load submodules, using fallback data:', err);
-        setSubModules(fallbackSubModules);
-      } finally {
-        setIsLoading(false);
+  const fetchSubModules = async () => {
+    setIsLoading(true);
+    setErrorMessage(null);
+    try {
+      console.log('Fetching CareWorks submodules for userId:', sessionData.userId);
+      const res = await trackerService.getSubModules(sessionData.token, sessionData.userId);
+      if (res && res.success && Array.isArray(res.data) && res.data.length > 0) {
+        console.log('Successfully fetched submodules:', res.data.length);
+        setSubModules(res.data);
+      } else {
+        const errMsg = res?.message || 'No submodules returned from API.';
+        console.log('No submodules returned from API:', errMsg);
+        setErrorMessage(errMsg);
+        setSubModules([]);
       }
-    };
+    } catch (err: any) {
+      const errMsg = err?.message || 'Failed to connect to the server.';
+      console.warn('Failed to load submodules:', err);
+      setErrorMessage(errMsg);
+      setSubModules([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
+  useEffect(() => {
     fetchSubModules();
   }, [sessionData]);
 
@@ -133,37 +107,48 @@ export const SubModuleSelectionScreen = ({
       {/* Vertical premium full-width card list in app theme colors */}
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.listContainer}>
-          {subModules.map((item) => {
-            const iconStr = getModuleIcon(item.SubModName);
-            // Dynamic card accent from API colorName or default theme primary color
-            const cardAccentColor = item.colorName?.trim() || THEME.colors.primary;
+          {subModules.length === 0 ? (
+            <View style={styles.errorContainer}>
+              
+              <Text style={styles.errorTitle}>Connection Issue</Text>
+              <Text style={styles.errorMessage}>
+                {errorMessage || 'The server returned an error or no modules are assigned to your account.'}
+              </Text>
+              
+            </View>
+          ) : (
+            subModules.map((item) => {
+              const iconStr = getModuleIcon(item.SubModName);
+              // Dynamic card accent from API colorName or default theme primary color
+              const cardAccentColor = item.colorName?.trim() || THEME.colors.primary;
 
-            return (
-              <TouchableOpacity
-                key={item.SubModCd}
-                activeOpacity={0.85}
-                style={[styles.card, { borderLeftColor: cardAccentColor }]}
-                onPress={() => onSelectSubModule(item)}
-              >
-                <View style={styles.cardLeftContent}>
-                  <View style={[styles.iconCircle, { backgroundColor: cardAccentColor + '12' }]}>
-                    <Text style={styles.iconEmoji}>{iconStr}</Text>
+              return (
+                <TouchableOpacity
+                  key={item.SubModCd}
+                  activeOpacity={0.85}
+                  style={[styles.card, { borderLeftColor: cardAccentColor }]}
+                  onPress={() => onSelectSubModule(item)}
+                >
+                  <View style={styles.cardLeftContent}>
+                    <View style={[styles.iconCircle, { backgroundColor: cardAccentColor + '12' }]}>
+                      <Text style={styles.iconEmoji}>{iconStr}</Text>
+                    </View>
+                    <View style={styles.cardTextContainer}>
+                      <Text style={styles.cardTitle} numberOfLines={1}>
+                        {item.SubModName}
+                      </Text>
+                      <Text style={styles.cardModuleGroup} numberOfLines={1}>
+                        {item.ModName}
+                      </Text>
+                    </View>
                   </View>
-                  <View style={styles.cardTextContainer}>
-                    <Text style={styles.cardTitle} numberOfLines={1}>
-                      {item.SubModName}
-                    </Text>
-                    <Text style={styles.cardModuleGroup} numberOfLines={1}>
-                      {item.ModName}
-                    </Text>
+                  <View style={styles.chevronContainer}>
+                    <View style={styles.chevronRight} />
                   </View>
-                </View>
-                <View style={styles.chevronContainer}>
-                  <View style={styles.chevronRight} />
-                </View>
-              </TouchableOpacity>
-            );
-          })}
+                </TouchableOpacity>
+              );
+            })
+          )}
           
           {/* Back to Login Button at the end of the list */}
           <TouchableOpacity
@@ -314,6 +299,73 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: THEME.colors.primary,
+    letterSpacing: 0.5,
+  },
+  errorContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+    paddingHorizontal: 28,
+    backgroundColor: '#ffffff',
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    marginVertical: 24,
+    width: '100%',
+    shadowColor: THEME.colors.primary,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.08,
+    shadowRadius: 20,
+    elevation: 4,
+  },
+  errorIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#f0fdfa', // Light teal background matching theme
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#ccfbf1',
+  },
+  errorIconEmoji: {
+    fontSize: 28,
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: THEME.colors.textDark,
+    marginBottom: 10,
+    textAlign: 'center',
+    letterSpacing: 0.3,
+  },
+  errorMessage: {
+    fontSize: 14,
+    color: THEME.colors.textMuted,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 28,
+    paddingHorizontal: 12,
+  },
+  retryBtn: {
+    backgroundColor: THEME.colors.primary,
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+    borderRadius: 12,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: THEME.colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  retryBtnText: {
+    color: '#ffffff',
+    fontWeight: '700',
+    fontSize: 15,
     letterSpacing: 0.5,
   },
 });

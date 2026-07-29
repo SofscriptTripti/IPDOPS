@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, ActivityIndicator, BackHandler, Alert } from 'react-native';
+import { View, ActivityIndicator, BackHandler, Alert, AppState } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { LoginScreen } from './src/screens/LoginScreen';
 import { DashboardScreen } from './src/screens/DashboardScreen';
@@ -27,9 +27,23 @@ export default function App() {
       try {
         const storedSession = await authService.getSession();
         if (storedSession) {
-          setSessionData(storedSession);
-          setIsSignedIn(true);
-          setCurrentScreen('SubModuleSelection');
+          const today = new Date().toDateString();
+          // Fallback: if loginDate is missing, initialize it to today and save
+          if (!storedSession.loginDate) {
+            storedSession.loginDate = today;
+            await authService.saveSession(storedSession);
+          }
+          if (storedSession.loginDate !== today) {
+            console.log('Session date changed. Logging out. Stored:', storedSession.loginDate, 'Today:', today);
+            await authService.clearSession();
+            setIsSignedIn(false);
+            setSessionData(null);
+            setCurrentScreen('Login');
+          } else {
+            setSessionData(storedSession);
+            setIsSignedIn(true);
+            setCurrentScreen('SubModuleSelection');
+          }
         }
       } catch (error) {
         console.warn('Failed to restore stored login session:', error);
@@ -47,10 +61,12 @@ export default function App() {
         return false; // Exit app normally
       }
       if (currentScreen === 'Dashboard') {
+        setSelectedSubModule(null);
         setCurrentScreen('SubModuleSelection');
         return true;
       }
       if (selectedSubModule?.SubModCd === 1384) {
+        setSelectedSubModule(null);
         setCurrentScreen('SubModuleSelection');
       } else {
         setCurrentScreen('Dashboard');
@@ -66,11 +82,54 @@ export default function App() {
   }, [currentScreen, selectedSubModule]);
 
   const handleLoginSuccess = async (data: UserSessionData) => {
-    await authService.saveSession(data);
-    setSessionData(data);
+    const sessionWithDate = {
+      ...data,
+      loginDate: new Date().toDateString(),
+    };
+    await authService.saveSession(sessionWithDate);
+    setSessionData(sessionWithDate);
     setIsSignedIn(true);
     setCurrentScreen('SubModuleSelection');
   };
+
+  // Check for date change on app state change (focus/foreground) and periodically
+  useEffect(() => {
+    if (!isSignedIn || !sessionData) return;
+
+    const checkDateAndLogout = async () => {
+      const today = new Date().toDateString();
+      console.log('Date Check - Saved:', sessionData.loginDate, 'Today:', today);
+      if (!sessionData.loginDate) {
+        // Fallback: if loginDate is missing, initialize it to today and save
+        const updatedSession = { ...sessionData, loginDate: today };
+        await authService.saveSession(updatedSession);
+        setSessionData(updatedSession);
+        return;
+      }
+      if (sessionData.loginDate !== today) {
+        console.log('Date changed! Automatically logging out...');
+        await handleLogout();
+      }
+    };
+
+    // Run check immediately on mount/focus
+    checkDateAndLogout();
+
+    // Check periodically every 5 seconds (faster check for testing!)
+    const interval = setInterval(checkDateAndLogout, 5000);
+
+    // Check on app state change
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active') {
+        checkDateAndLogout();
+      }
+    });
+
+    return () => {
+      clearInterval(interval);
+      subscription.remove();
+    };
+  }, [isSignedIn, sessionData]);
 
   const handleSelectSubModule = async (subModule: SubModuleItem) => {
     if (!sessionData) return;
@@ -133,9 +192,14 @@ export default function App() {
     setCurrentScreen('PatientTimeline');
   };
 
+  const handleBackToSubModuleSelection = () => {
+    setSelectedSubModule(null);
+    setCurrentScreen('SubModuleSelection');
+  };
+
   const handleBackToDashboard = () => {
     if (selectedSubModule?.SubModCd === 1384) {
-      setCurrentScreen('SubModuleSelection');
+      handleBackToSubModuleSelection();
     } else {
       setCurrentScreen('Dashboard');
     }
@@ -144,6 +208,32 @@ export default function App() {
   const handleNavigateToNotifications = () => {
     setCurrentScreen('Notifications');
   };
+
+  // Check date on render to immediately intercept and block screen rendering if expired
+  if (isSignedIn && sessionData) {
+    const today = new Date().toDateString();
+    if (sessionData.loginDate && sessionData.loginDate !== today) {
+      console.log('Date change detected on render! Blocking render and logging out...');
+      
+      // Perform logout asynchronously (clear async storage, etc.)
+      authService.clearSession().catch(err => console.warn(err));
+      
+      // Reset states synchronously so React immediately rerenders the Login screen
+      setIsSignedIn(false);
+      setSessionData(null);
+      setSelectedSubModule(null);
+      setSelectedPatient(null);
+      setHasLoadedTimelineOnce(false);
+      setCurrentScreen('Login');
+      
+      // Return loading indicator for the current frame
+      return (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: THEME.colors.primary }}>
+          <ActivityIndicator size="large" color="#ffffff" />
+        </View>
+      );
+    }
+  }
 
   // Fullscreen loading spinner while restoring session or checking module access rights
   if (isInitialLoading || isCheckingRights) {
@@ -174,6 +264,7 @@ export default function App() {
               onNavigateToBedTurnover={handleNavigateToBedTurnover}
               onNavigateToTimeline={handleNavigateToTimeline}
               onNavigateToNotifications={handleNavigateToNotifications}
+              onBackToSubModuleSelection={handleBackToSubModuleSelection}
             />
           </View>
           <View style={{ flex: 1, display: currentScreen === 'BedTurnover' ? 'flex' : 'none' }}>
