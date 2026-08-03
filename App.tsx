@@ -198,6 +198,7 @@ export default function App() {
   };
 
   const handleBackToDashboard = () => {
+    setSelectedPatient(null);
     if (selectedSubModule?.SubModCd === 1384) {
       handleBackToSubModuleSelection();
     } else {
@@ -280,8 +281,8 @@ export default function App() {
               patient={selectedPatient} 
               onBack={handleBackToDashboard} 
               sessionData={sessionData} 
-              hasLoadedOnce={hasLoadedTimelineOnce}
-              onLoadedOnce={() => setHasLoadedTimelineOnce(true)}
+              hasLoadedOnce={false}
+              onLoadedOnce={() => {}}
             />
           )}
           {currentScreen === 'Notifications' && (

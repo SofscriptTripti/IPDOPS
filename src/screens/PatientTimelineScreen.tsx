@@ -80,8 +80,8 @@ interface PatientTimelineScreenProps {
   onLoadedOnce: () => void;
 }
 
-const calculateTat = (timeStart: string | null, timeEnd: string | null): string => {
-  if (!timeStart || !timeEnd) return '-';
+const calculateTat = (timeStart: any, timeEnd: any): string => {
+  if (!timeStart || !timeEnd || typeof timeStart !== 'string' || typeof timeEnd !== 'string') return '-';
   const start = new Date(timeStart);
   const end = new Date(timeEnd);
   if (isNaN(start.getTime()) || isNaN(end.getTime())) return '-';
@@ -96,8 +96,8 @@ const calculateTat = (timeStart: string | null, timeEnd: string | null): string 
   return `${hours}:${mins < 10 ? '0' + mins : mins}`;
 };
 
-const formatTimeOnly = (timeStr: string | null): string => {
-  if (!timeStr) return '-';
+const formatTimeOnly = (timeStr: any): string => {
+  if (!timeStr || typeof timeStr !== 'string') return '-';
   const idx = timeStr.indexOf('T');
   if (idx !== -1) {
     let t = timeStr.substring(idx + 1, idx + 16);
@@ -112,8 +112,8 @@ const formatTimeOnly = (timeStr: string | null): string => {
 const formatTatEquation = (
   labelStart: string,
   labelEnd: string,
-  timeStart: string | null,
-  timeEnd: string | null
+  timeStart: any,
+  timeEnd: any
 ): string => {
   const diffVal = calculateTat(timeStart, timeEnd);
   const startStr = formatTimeOnly(timeStart);
@@ -122,7 +122,8 @@ const formatTatEquation = (
 };
 
 const getStageColorCode = (p: any, sIdx: number): number => {
-  if (p.NewStageColors) {
+  if (!p) return 0;
+  if (p.NewStageColors && typeof p.NewStageColors === 'string') {
     const arr = p.NewStageColors.split(',');
     if (arr[sIdx] !== undefined) {
       return parseInt(arr[sIdx], 10) || 0;
@@ -132,7 +133,7 @@ const getStageColorCode = (p: any, sIdx: number): number => {
   if (p[key] !== undefined && p[key] !== null) {
     return parseInt(p[key], 10) || 0;
   }
-  if (p.StageColors) {
+  if (p.StageColors && typeof p.StageColors === 'string') {
     const arr = p.StageColors.split(',');
     if (arr[sIdx] !== undefined) {
       return parseInt(arr[sIdx], 10) || 0;
@@ -157,6 +158,44 @@ const formatMsgTime = (dtStr: string) => {
     return `${hours}:${minutes} ${ampm}`;
   } catch {
     return dtStr;
+  }
+};
+
+const formatDateTimeWithAmPm = (timeStr: any): string => {
+  try {
+    if (!timeStr || typeof timeStr !== 'string') return '';
+    const parts = timeStr.split('T');
+    if (parts.length === 2) {
+      const datePart = parts[0];
+      const timePart = parts[1];
+      if (!datePart || !timePart) return timeStr;
+      const dateSubparts = datePart.split('-');
+      if (dateSubparts.length === 3) {
+        const month = dateSubparts[1];
+        const day = dateSubparts[2];
+        if (!month || !day || timePart.length < 5) return timeStr;
+        const hrs = parseInt(timePart.substring(0, 2), 10);
+        const mins = timePart.substring(3, 5);
+        if (isNaN(hrs)) return timeStr;
+        const ampm = hrs >= 12 ? 'PM' : 'AM';
+        const displayHrs = hrs % 12 === 0 ? 12 : hrs % 12;
+        const formattedHrs = String(displayHrs).padStart(2, '0');
+        return `${day}/${month} ${formattedHrs}:${mins} ${ampm}`;
+      } else {
+        if (timePart.length < 5) return timeStr;
+        const hrs = parseInt(timePart.substring(0, 2), 10);
+        const mins = timePart.substring(3, 5);
+        if (isNaN(hrs)) return timeStr;
+        const ampm = hrs >= 12 ? 'PM' : 'AM';
+        const displayHrs = hrs % 12 === 0 ? 12 : hrs % 12;
+        const formattedHrs = String(displayHrs).padStart(2, '0');
+        return `${formattedHrs}:${mins} ${ampm}`;
+      }
+    }
+    return timeStr;
+  } catch (e) {
+    console.warn("formatDateTimeWithAmPm error:", e);
+    return typeof timeStr === 'string' ? timeStr : '';
   }
 };
 
@@ -243,7 +282,7 @@ export const PatientTimelineScreen = ({
 
   const loadChatStatus = useCallback(async () => {
     try {
-      const ipNoNum = parseInt(String(activePatient.ipNo || '').replace(/[^0-9]/g, ''), 10) || 0;
+      const ipNoNum = parseInt(String(activePatient?.ipNo || '').replace(/[^0-9]/g, ''), 10) || 0;
       if (!ipNoNum) return;
 
       const res = await trackerService.chatUnreadCount(sessionData.token, {
@@ -263,7 +302,7 @@ export const PatientTimelineScreen = ({
     } catch (err) {
       console.warn('Failed to load chat status:', err);
     }
-  }, [activePatient.ipNo, sessionData]);
+  }, [activePatient?.ipNo, sessionData]);
 
   const joinSignalRGroup = useCallback(async (targetThreadId: number) => {
     if (!signalRService.isConnected) {
@@ -367,14 +406,14 @@ export const PatientTimelineScreen = ({
     if (!activeThreadId) {
       setIsFetchingChat(true);
       try {
-        const ipNoNum = parseInt(String(activePatient.ipNo || '').replace(/[^0-9]/g, ''), 10) || 0;
+        const ipNoNum = parseInt(String(activePatient?.ipNo || '').replace(/[^0-9]/g, ''), 10) || 0;
         const res = await trackerService.chatGetOrCreateThread(sessionData.token, {
           cocd: sessionData.coCd || "1",
           div: sessionData.div || 1,
           loc: sessionData.loc || 1,
           ipNo: ipNoNum,
           ptnNo: 0,
-          title: activePatient.name || 'Patient Chat',
+          title: activePatient?.name || 'Patient Chat',
           userId: sessionData.userId,
           userName: sessionData.userNickName || 'Staff'
         });
@@ -469,8 +508,8 @@ export const PatientTimelineScreen = ({
       if (!data) return;
       const ipNoVal = data.ipNo ?? data.IpNo ?? data.IPNo;
       const unreadCountVal = data.unreadCount ?? data.UnreadCount;
-      const activeIpClean = String(activePatient.ipNo || '').replace(/[^0-9]/g, '');
-      if (ipNoVal && (String(ipNoVal) === String(activePatient.ipNo) || String(ipNoVal) === activeIpClean)) {
+      const activeIpClean = String(activePatient?.ipNo || '').replace(/[^0-9]/g, '');
+      if (ipNoVal && (String(ipNoVal) === String(activePatient?.ipNo || '') || String(ipNoVal) === activeIpClean)) {
         setUnreadCount(unreadCountVal ?? 0);
       }
     };
@@ -523,14 +562,14 @@ export const PatientTimelineScreen = ({
     let activeThreadId = threadId;
     if (!activeThreadId) {
       try {
-        const ipNoNum = parseInt(String(activePatient.ipNo || '').replace(/[^0-9]/g, ''), 10) || 0;
+        const ipNoNum = parseInt(String(activePatient?.ipNo || '').replace(/[^0-9]/g, ''), 10) || 0;
         const res = await trackerService.chatGetOrCreateThread(sessionData.token, {
           cocd: sessionData.coCd || "1",
           div: sessionData.div || 1,
           loc: sessionData.loc || 1,
           ipNo: ipNoNum,
           ptnNo: 0,
-          title: activePatient.name || 'Patient Chat',
+          title: activePatient?.name || 'Patient Chat',
           userId: sessionData.userId,
           userName: sessionData.userNickName || 'Staff'
         });
@@ -633,18 +672,16 @@ export const PatientTimelineScreen = ({
   useEffect(() => {
     const fetchLiveDetail = async () => {
       setIsFetchingLive(true);
-      if (!hasLoadedOnce) {
-        setIsLoading(true);
-      }
+      setIsLoading(true);
       try {
-        const ipNumberStr = patient.ipNo.replace(/[^0-9]/g, '');
+        const ipNumberStr = (patient?.ipNo || '').replace(/[^0-9]/g, '');
         const ipnoVal = ipNumberStr ? parseInt(ipNumberStr, 10) : null;
         
         if (ipnoVal) {
           let startStr = '2026-07-01';
           let endStr = '2026-07-15';
 
-          if (patient.dateRange && patient.dateRange.includes('/')) {
+          if (patient?.dateRange && patient.dateRange.includes('/')) {
             const match = patient.dateRange.match(/(\d{2})\/(\d{2})/);
             if (match) {
               const day = match[1];
@@ -797,9 +834,9 @@ export const PatientTimelineScreen = ({
                   oldDiffText = formatTatEquation('T13', 'T15', p.LastTPAAprDtTm, p.ActDschgDtTm);
                   break;
                 case 15: // T16: Bed Ready
-                  timeStr = p.BedReadyDtTm || '';
-                  diffText = formatTatEquation('T15', 'T16', p.ActDschgDtTm, p.BedReadyDtTm);
-                  oldDiffText = formatTatEquation('T15', 'T16', p.ActDschgDtTm, p.BedReadyDtTm);
+                  timeStr = p.BedReady || p.BedReadyDtTm || '';
+                  diffText = formatTatEquation('T15', 'T16', p.ActDschgDtTm, p.BedReady || p.BedReadyDtTm);
+                  oldDiffText = formatTatEquation('T15', 'T16', p.ActDschgDtTm, p.BedReady || p.BedReadyDtTm);
                   break;
               }
 
@@ -808,78 +845,57 @@ export const PatientTimelineScreen = ({
               else if (colorCode === 2) status = 'orange';
               else if (colorCode === 3) status = 'red';
 
-              let displayTime = '';
-              if (timeStr) {
-                const parts = timeStr.split('T');
-                if (parts.length === 2) {
-                  const datePart = parts[0];
-                  const timePart = parts[1];
-                  const dateSubparts = datePart.split('-');
-                  if (dateSubparts.length === 3) {
-                    const month = dateSubparts[1];
-                    const day = dateSubparts[2];
-                    const hourMin = timePart.substring(0, 5);
-                    displayTime = `${day}/${month} ${hourMin}`;
-                  } else {
-                    displayTime = timePart.substring(0, 5);
-                  }
-                } else {
-                  displayTime = timeStr;
-                }
-              }
+               const displayTime = formatDateTimeWithAmPm(timeStr);
 
-              return {
-                code: `T${sIdx + 1}`,
-                name,
-                time: displayTime,
-                diffText: diffText,
-                oldDiffText: oldDiffText,
-                status,
-                tatLimit: '',
-              };
-            });
+               return {
+                 code: `T${sIdx + 1}`,
+                 name,
+                 time: displayTime,
+                 diffText: diffText,
+                 oldDiffText: oldDiffText,
+                 status,
+                 tatLimit: '',
+               };
+             });
 
-            const status = p?.DschgStatus || 'Admitted';
+             const status = p?.DschgStatus || 'Admitted';
 
-            let statusDetail = '';
-            const riskVal = p?.OverallRisk !== undefined && p?.OverallRisk !== null ? Number(p.OverallRisk) : 0;
-            if (riskVal === 0) {
-              statusDetail = 'Pending';
-            } else if (riskVal === 1) {
-              statusDetail = 'On Track';
-            } else if (riskVal === 2) {
-              statusDetail = 'Risk';
-            } else if (riskVal === 3) {
-              statusDetail = 'Delay';
-            }
-            console.log("here is status>>>>>", statusDetail);
+             let statusDetail = '';
+             const riskVal = p?.OverallRisk !== undefined && p?.OverallRisk !== null ? Number(p.OverallRisk) : 0;
+             if (riskVal === 0) {
+               statusDetail = 'Pending';
+             } else if (riskVal === 1) {
+               statusDetail = 'On Track';
+             } else if (riskVal === 2) {
+               statusDetail = 'Risk';
+             } else if (riskVal === 3) {
+               statusDetail = 'Delay';
+             }
+             console.log("here is status>>>>>", statusDetail);
 
-            let dateRangeText = 'T1 - Advice Pending';
-            if (p?.DschgAdvGivenTm) {
-              const month = p.DschgAdvGivenTm.substring(5, 7);
-              const day = p.DschgAdvGivenTm.substring(8, 10);
-              const hourMin = p.DschgAdvGivenTm.substring(11, 16);
-              dateRangeText = `T1 - ${day}/${month} ${hourMin}`;
-            }
+             let dateRangeText = 'T1 - Advice Pending';
+             if (p?.DschgAdvGivenTm) {
+               dateRangeText = `T1 - ${formatDateTimeWithAmPm(p.DschgAdvGivenTm)}`;
+             }
 
             const totalTatVal = calculateTat(p.DschgAdvGivenTm, p.ActDschgDtTm);
-            const bedTurnoverTatVal = calculateTat(p.DschgAdvGivenTm, p.BedReadyDtTm);
+            const bedTurnoverTatVal = calculateTat(p.DschgAdvGivenTm, p.BedReady || p.BedReadyDtTm);
 
             const mappedDetails: PatientSessionDetails = {
-              id: p?.IPNo ? String(p.IPNo) : patient.id,
-              name: p?.PatientName || patient.name,
-              ipNo: p?.IPNo ? String(p?.IPNo) : patient.ipNo,
-              bed: p?.BedNo ? `Bed ${p.BedNo}` : patient.bed,
-              ward: p?.Ward || patient.ward,
-              speciality: p?.Splty_Cd || p?.Speciality || patient.speciality,
-              doctor: p?.DocNm || p?.DoctorName || p?.Doctor || patient.doctor,
+              id: p?.IPNo ? String(p.IPNo) : (patient?.id || ''),
+              name: p?.PatientName || (patient?.name || 'PATIENT'),
+              ipNo: p?.IPNo ? String(p?.IPNo) : (patient?.ipNo || ''),
+              bed: p?.BedNo ? `Bed ${p.BedNo}` : (patient?.bed || ''),
+              ward: p?.Ward || (patient?.ward || ''),
+              speciality: p?.Splty_Cd || p?.Speciality || (patient?.speciality || ''),
+              doctor: p?.DocNm || p?.DoctorName || p?.Doctor || (patient?.doctor || ''),
               stageProgress: formattedStages.filter(s => s.status !== 'white').length,
               totalStages: 16,
               dateRange: dateRangeText,
               status,
-              statusDetail: patient.statusDetail,
-              paymentBy: p?.PtnPayTyp || patient.paymentBy,
-              patientType: p?.PatientType || patient.patientType,
+              statusDetail: patient?.statusDetail || 'Pending',
+              paymentBy: p?.PtnPayTyp || (patient?.paymentBy || ''),
+              patientType: p?.PatientType || (patient?.patientType || ''),
               stages: formattedStages,
               tpaAprDtTm: p?.LastTPAAprDtTm,
               tpaAprAmt: p?.LastTPAAprAmt,
@@ -905,10 +921,10 @@ export const PatientTimelineScreen = ({
   }, [patient, sessionData]);
 
   // Map status colors for TAT overall badge
-  const isPending = activePatient.statusDetail === 'Pending';
-  const isOnTrack = activePatient.statusDetail === 'On Track';
-  const isRisk = activePatient.statusDetail === 'Risk';
-  const isDelay = activePatient.statusDetail === 'Delay';
+  const isPending = activePatient?.statusDetail === 'Pending';
+  const isOnTrack = activePatient?.statusDetail === 'On Track';
+  const isRisk = activePatient?.statusDetail === 'Risk';
+  const isDelay = activePatient?.statusDetail === 'Delay';
 
   const tatBg = isFetchingLive 
     ? '#f8fafc' 
@@ -948,7 +964,7 @@ export const PatientTimelineScreen = ({
 
   const tatLabel = isFetchingLive 
     ? '-' 
-    : activePatient.statusDetail || 'Pending';
+    : activePatient?.statusDetail || 'Pending';
 
   if (isLoading) {
     return (
@@ -997,9 +1013,9 @@ export const PatientTimelineScreen = ({
         <View style={styles.patientDetailsCard}>
           <View style={styles.patientNameRow}>
             <Text style={styles.patientName} numberOfLines={1}>
-              {activePatient.name}
+              {activePatient?.name}
             </Text>
-            {activePatient.ipNo ? (
+            {activePatient?.ipNo ? (
               <Text style={styles.patientIpBadge}>
                 {String(activePatient.ipNo).startsWith('IP') ? activePatient.ipNo : `IP ${activePatient.ipNo}`}
               </Text>
@@ -1014,7 +1030,7 @@ export const PatientTimelineScreen = ({
             </View>
             <View style={styles.overallTatProgressContainer}>
               <Text style={styles.overallTatStagesText}>Stages done</Text>
-              <Text style={styles.overallTatProgressValue}>{activePatient.stageProgress}/{activePatient.totalStages}</Text>
+              <Text style={styles.overallTatProgressValue}>{activePatient?.stageProgress}/{activePatient?.totalStages}</Text>
             </View>
           </View>
 
@@ -1022,27 +1038,27 @@ export const PatientTimelineScreen = ({
           <View style={styles.specificationsList}>
             <View style={styles.specItem}>
               <Text style={styles.specLabel}>BED</Text>
-              <Text style={styles.specValue}>{activePatient.bed}</Text>
+              <Text style={styles.specValue}>{activePatient?.bed}</Text>
             </View>
             <View style={styles.specItem}>
               <Text style={styles.specLabel}>WARD</Text>
-              <Text style={styles.specValue}>{activePatient.ward}</Text>
+              <Text style={styles.specValue}>{activePatient?.ward}</Text>
             </View>
             <View style={styles.specItem}>
               <Text style={styles.specLabel}>SPECIALITY</Text>
-              <Text style={styles.specValue}>{activePatient.speciality}</Text>
+              <Text style={styles.specValue}>{activePatient?.speciality}</Text>
             </View>
             <View style={styles.specItem}>
               <Text style={styles.specLabel}>DOCTOR</Text>
-              <Text style={styles.specValue}>{activePatient.doctor}</Text>
+              <Text style={styles.specValue}>{activePatient?.doctor}</Text>
             </View>
             <View style={styles.specItem}>
               <Text style={styles.specLabel}>PAYMENT BY</Text>
-              <Text style={styles.specValue}>{activePatient.paymentBy}</Text>
+              <Text style={styles.specValue}>{activePatient?.paymentBy}</Text>
             </View>
             <View style={styles.specItem}>
               <Text style={styles.specLabel}>PATIENT TYPE</Text>
-              <Text style={styles.specValue}>{activePatient.patientType}</Text>
+              <Text style={styles.specValue}>{activePatient?.patientType}</Text>
             </View>
             {/* <View style={styles.specItem}> */}
               {/* <Text style={styles.specLabel}>STATUS</Text>
@@ -1070,13 +1086,13 @@ export const PatientTimelineScreen = ({
         {/* Section Split: Right (Discharge Stages Vertical Timeline) */}
         <View style={styles.timelineSection}>
           <View style={styles.timelineSectionHeader}>
-            <Text style={styles.timelineCountText}>All {activePatient.totalStages} discharge stages</Text>
+            <Text style={styles.timelineCountText}>All {activePatient?.totalStages || 16} discharge stages</Text>
           </View>
 
           {/* Vertical Timeline Stack */}
           <View style={styles.timelineList}>
-            {activePatient.stages.map((stage, idx) => {
-              const isLast = idx === activePatient.stages.length - 1;
+            {(activePatient?.stages || []).map((stage, idx) => {
+              const isLast = idx === (activePatient?.stages || []).length - 1;
               const isWhite = stage.status === 'white';
               const dotBg = isWhite ? '#ffffff' : stage.status === 'green' ? '#008000' : stage.status === 'orange' ? '#FFA500' : '#FF0000';
               const dotBorderColor = isWhite ? '#cbd5e1' : dotBg;
@@ -1108,7 +1124,7 @@ export const PatientTimelineScreen = ({
                     <View style={styles.stageTitleRow}>
                       <Text style={styles.stageTitleText}>
                         {stage.name}
-                        {stage.code === 'T13' && (activePatient.tpaAprDtTm || activePatient.tpaAprAmt) && (
+                        {stage.code === 'T13' && (activePatient?.tpaAprDtTm || activePatient?.tpaAprAmt) && (
                           <Text style={[
                             styles.tpaTitleInfoText, 
                             { 
@@ -1120,11 +1136,11 @@ export const PatientTimelineScreen = ({
                             <Text style={{ color: (stage.status === 'green' || stage.status === 'white') ? '#14532d' : '#7c2d12' }}>
                               {`Time: `}
                               <Text style={{ fontWeight: '800' }}>
-                                {activePatient.tpaAprDtTm ? formatTimeOnly(activePatient.tpaAprDtTm) : '—'}
+                                {activePatient?.tpaAprDtTm ? formatTimeOnly(activePatient.tpaAprDtTm) : '—'}
                               </Text>
                               {` | Amt: `}
                               <Text style={{ fontWeight: '800' }}>
-                                {activePatient.tpaAprAmt !== null && activePatient.tpaAprAmt !== undefined ? `₹${activePatient.tpaAprAmt}` : '—'}
+                                {activePatient?.tpaAprAmt !== null && activePatient?.tpaAprAmt !== undefined ? `₹${activePatient.tpaAprAmt}` : '—'}
                               </Text>
                             </Text>
                             {`)  `}
@@ -1150,20 +1166,10 @@ export const PatientTimelineScreen = ({
                             <Text style={[styles.noTatText, { marginRight: 6, marginBottom: 3 }]}>{stage.diffText || '-'}</Text>
                           )}
 
-                          {/* 
-                          {stage.oldDiffText && stage.oldDiffText !== '-' && !stage.oldDiffText.endsWith('= -') && stage.oldDiffText !== stage.diffText ? (
-                            <View style={[styles.diffBadge, { backgroundColor: '#f1f5f9', marginBottom: 3 }]}>
-                              <Text style={[styles.diffBadgeText, { color: '#64748b' }]}>
-                                {`Old: ${stage.oldDiffText}`}
-                              </Text>
-                            </View>
-                          ) : null}
-                          */}
-
-                          {stage.code === 'T9' && activePatient.lastBillPreparedBy ? (
+                          {stage.code === 'T9' && activePatient?.lastBillPreparedBy ? (
                             <View style={[styles.diffBadge, { backgroundColor: 'rgba(34, 197, 94, 0.08)', marginBottom: 3 }]}>
                               <Text style={[styles.diffBadgeText, { color: '#16a34a' }]}>
-                                {`Prepared By: ${activePatient.lastBillPreparedBy}`}
+                                {`Prepared By: ${activePatient?.lastBillPreparedBy}`}
                               </Text>
                             </View>
                           ) : null}
@@ -1212,12 +1218,14 @@ export const PatientTimelineScreen = ({
         <Modal
           visible={isChatModalVisible}
           transparent={true}
+          statusBarTranslucent={true}
           animationType="slide"
           onRequestClose={() => setIsChatModalVisible(false)}
         >
           <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             style={{ flex: 1 }}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
           >
             <TouchableOpacity 
               activeOpacity={1}
@@ -1245,9 +1253,9 @@ export const PatientTimelineScreen = ({
                     </TouchableOpacity>
                     
                     <View style={styles.chatHeaderTitleContainer}>
-                      <Text style={styles.chatHeaderTitle} numberOfLines={1}>{activePatient.name}</Text>
+                      <Text style={styles.chatHeaderTitle} numberOfLines={1}>{activePatient?.name}</Text>
                       <Text style={styles.chatHeaderSubtitle}>
-                        {activePatient.ipNo} • {activePatient.bed} • {activePatient.ward}
+                        {activePatient?.ipNo} • {activePatient?.bed} • {activePatient?.ward}
                       </Text>
                     </View>
                     

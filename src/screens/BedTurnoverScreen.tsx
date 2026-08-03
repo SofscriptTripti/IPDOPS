@@ -11,6 +11,7 @@ import {
   StatusBar,
   KeyboardAvoidingView,
   Modal,
+  Keyboard,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { THEME } from '../constants/theme';
@@ -764,9 +765,14 @@ export const BedTurnoverScreen = ({ sessionData, onBack, visible, selectedSubMod
               </TouchableOpacity>
             </View>
 
-            {/* Modal Ward Search Input */}
             <View style={styles.bottomSheetSearchWrapper}>
-              <SearchIcon color={THEME.colors.textMuted} />
+              <TouchableOpacity 
+                activeOpacity={0.7}
+                onPress={() => Keyboard.dismiss()}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <SearchIcon color={THEME.colors.textMuted} />
+              </TouchableOpacity>
               <TextInput
                 style={styles.bottomSheetSearchInput}
                 placeholder="Search ward name..."
@@ -872,9 +878,14 @@ export const BedTurnoverScreen = ({ sessionData, onBack, visible, selectedSubMod
               </TouchableOpacity>
             </View>
 
-            {/* Modal Bed Type Search Input */}
             <View style={styles.bottomSheetSearchWrapper}>
-              <SearchIcon color={THEME.colors.textMuted} />
+              <TouchableOpacity 
+                activeOpacity={0.7}
+                onPress={() => Keyboard.dismiss()}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <SearchIcon color={THEME.colors.textMuted} />
+              </TouchableOpacity>
               <TextInput
                 style={styles.bottomSheetSearchInput}
                 placeholder="Search bed type..."

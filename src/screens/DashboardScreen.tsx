@@ -14,6 +14,8 @@ import {
   Platform,
   Modal,
   RefreshControl,
+  KeyboardAvoidingView,
+  Keyboard,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { THEME } from '../constants/theme';
@@ -87,7 +89,8 @@ export const DashboardScreen = ({
 }: DashboardScreenProps) => {
   const insets = useSafeAreaInsets();
   
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchText, setSearchText] = useState('');
+  const [activeSearchQuery, setActiveSearchQuery] = useState('');
   const [selectedTab, setSelectedTab] = useState<'All' | 'Admitted' | 'Discharged' | 'Out of TAT'>('All');
   const [activeBottomTab, setActiveBottomTab] = useState<'Dashboard' | 'Patients' | 'Reports' | 'Profile'>('Dashboard');
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -105,7 +108,8 @@ export const DashboardScreen = ({
   const [wards, setWards] = useState<{ Cd: number; Dcd: string | null }[]>([]);
   const [selectedWard, setSelectedWard] = useState<{ Cd: number; Dcd: string | null } | null>(null);
   const [showWardModal, setShowWardModal] = useState(false);
-  const [wardSearchQuery, setWardSearchQuery] = useState('');
+  const [wardSearchText, setWardSearchText] = useState('');
+  const [activeWardSearchQuery, setActiveWardSearchQuery] = useState('');
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchWards = useCallback(async () => {
@@ -342,11 +346,11 @@ export const DashboardScreen = ({
       patient.status === selectedTab ||
       (selectedTab === 'Out of TAT' && (patient.status === 'Out of TAT' || patient.statusDetail === 'Delay'));
     const matchesSearch =
-      patient.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      patient.ipNo.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      patient.bed.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      patient.speciality.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      patient.doctor.toLowerCase().includes(searchQuery.toLowerCase());
+      patient.name.toLowerCase().includes(activeSearchQuery.toLowerCase()) ||
+      patient.ipNo.toLowerCase().includes(activeSearchQuery.toLowerCase()) ||
+      patient.bed.toLowerCase().includes(activeSearchQuery.toLowerCase()) ||
+      patient.speciality.toLowerCase().includes(activeSearchQuery.toLowerCase()) ||
+      patient.doctor.toLowerCase().includes(activeSearchQuery.toLowerCase());
       
     let matchesDate = true;
     const pDate = getPatientDate(patient.dateRange);
@@ -571,7 +575,8 @@ export const DashboardScreen = ({
           <TouchableOpacity 
             style={styles.tabBtn}
             onPress={() => {
-              setWardSearchQuery('');
+              setWardSearchText('');
+              setActiveWardSearchQuery('');
               setShowWardModal(true);
             }}
             activeOpacity={0.8}
@@ -585,13 +590,27 @@ export const DashboardScreen = ({
         {/* Search Bar & Date Picker Row */}
         <View style={styles.searchFilterRow}>
           <View style={styles.searchWrapper}>
-            <SearchIcon color={THEME.colors.textMuted} />
+            <TouchableOpacity 
+              activeOpacity={0.7}
+              onPress={() => {
+                Keyboard.dismiss();
+                setActiveSearchQuery(searchText);
+              }}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <SearchIcon color={THEME.colors.textMuted} />
+            </TouchableOpacity>
             <TextInput
               style={styles.searchInput}
               placeholder="Search IP no. or name"
               placeholderTextColor={THEME.colors.textMuted}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
+              value={searchText}
+              onChangeText={setSearchText}
+              onSubmitEditing={() => {
+                Keyboard.dismiss();
+                setActiveSearchQuery(searchText);
+              }}
+              returnKeyType="search"
               autoCapitalize="none"
             />
           </View>
@@ -862,98 +881,145 @@ export const DashboardScreen = ({
       <Modal
         visible={showWardModal}
         transparent={true}
+        statusBarTranslucent={true}
         animationType="slide"
         onRequestClose={() => setShowWardModal(false)}
       >
-        <View style={styles.wardModalOverlay}>
-          <View style={styles.wardModalContent}>
-            <View style={styles.wardModalHeader}>
-              <Text style={styles.wardModalTitle}>Select Ward</Text>
-              <TouchableOpacity
-                onPress={() => setShowWardModal(false)}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <Text style={styles.wardModalCloseText}>Close</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Modal Ward Search Input */}
-            <View style={styles.wardModalSearchWrapper}>
-              <SearchIcon color={THEME.colors.textMuted} />
-              <TextInput
-                style={styles.wardModalSearchInput}
-                placeholder="Search ward name..."
-                placeholderTextColor={THEME.colors.textMuted}
-                value={wardSearchQuery}
-                onChangeText={setWardSearchQuery}
-                autoCapitalize="none"
-              />
-            </View>
-
-            <ScrollView 
-              style={styles.wardModalList} 
-              showsVerticalScrollIndicator={true}
-              keyboardShouldPersistTaps="handled"
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            style={styles.wardModalOverlay}
+            onPress={() => setShowWardModal(false)}
+          >
+            <TouchableOpacity
+              activeOpacity={1}
+              style={styles.wardModalContent}
             >
-              {/* Option for All Wards */}
-              <TouchableOpacity
-                activeOpacity={0.7}
-                style={[
-                  styles.wardModalItem,
-                  selectedWard === null && styles.wardModalItemActive
-                ]}
-                onPress={() => {
-                  setSelectedWard(null);
-                  setShowWardModal(false);
-                }}
-              >
-                <Text style={[
-                  styles.wardModalItemText,
-                  selectedWard === null && styles.wardModalItemTextActive
-                ]}>
-                  All Wards
-                </Text>
-                {selectedWard === null && (
-                  <Text style={styles.checkmarkIcon}>✓</Text>
-                )}
-              </TouchableOpacity>
+              <View style={styles.wardModalHeader}>
+                <Text style={styles.wardModalTitle}>Select Ward</Text>
+                <TouchableOpacity
+                  onPress={() => setShowWardModal(false)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Text style={styles.wardModalCloseText}>Close</Text>
+                </TouchableOpacity>
+              </View>
 
-              {/* Filtered ward options */}
-              {wards
-                .filter(w => {
-                  if (!wardSearchQuery) return true;
-                  return w.Dcd && w.Dcd.toLowerCase().includes(wardSearchQuery.toLowerCase());
-                })
-                .map((w) => {
-                  const isSelected = selectedWard?.Cd === w.Cd;
-                  return (
-                    <TouchableOpacity
-                      key={w.Cd}
-                      activeOpacity={0.7}
-                      style={[
-                        styles.wardModalItem,
-                        isSelected && styles.wardModalItemActive
-                      ]}
-                      onPress={() => {
-                        setSelectedWard(w);
-                        setShowWardModal(false);
-                      }}
-                    >
-                      <Text style={[
-                        styles.wardModalItemText,
-                        isSelected && styles.wardModalItemTextActive
-                      ]}>
-                        {w.Dcd}
-                      </Text>
-                      {isSelected && (
-                        <Text style={styles.checkmarkIcon}>✓</Text>
-                      )}
-                    </TouchableOpacity>
-                  );
-                })}
-            </ScrollView>
-          </View>
-        </View>
+              {/* Modal Ward Search Input Row */}
+              <View style={styles.wardModalSearchRow}>
+                <View style={styles.wardModalSearchWrapper}>
+                  <SearchIcon color={THEME.colors.textMuted} />
+                  <TextInput
+                    style={styles.wardModalSearchInput}
+                    placeholder="Search ward name..."
+                    placeholderTextColor={THEME.colors.textMuted}
+                    value={wardSearchText}
+                    onChangeText={(text) => {
+                      setWardSearchText(text);
+                      if (text.trim() === '') {
+                        setActiveWardSearchQuery('');
+                      }
+                    }}
+                    onSubmitEditing={() => {
+                      if (wardSearchText.trim() !== '') {
+                        Keyboard.dismiss();
+                        setActiveWardSearchQuery(wardSearchText);
+                      }
+                    }}
+                    returnKeyType="search"
+                    autoCapitalize="none"
+                  />
+                </View>
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  disabled={wardSearchText.trim() === ''}
+                  style={[
+                    styles.wardModalSearchBtn,
+                    wardSearchText.trim() === '' && styles.wardModalSearchBtnDisabled
+                  ]}
+                  onPress={() => {
+                    Keyboard.dismiss();
+                    setActiveWardSearchQuery(wardSearchText);
+                  }}
+                >
+                  <Text style={[
+                    styles.wardModalSearchBtnText,
+                    wardSearchText.trim() === '' && styles.wardModalSearchBtnTextDisabled
+                  ]}>
+                    Search
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView 
+                style={styles.wardModalList} 
+                showsVerticalScrollIndicator={true}
+                keyboardShouldPersistTaps="handled"
+              >
+                {/* Option for All Wards */}
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  style={[
+                    styles.wardModalItem,
+                    selectedWard === null && styles.wardModalItemActive
+                  ]}
+                  onPress={() => {
+                    setSelectedWard(null);
+                    setShowWardModal(false);
+                  }}
+                >
+                  <Text style={[
+                    styles.wardModalItemText,
+                    selectedWard === null && styles.wardModalItemTextActive
+                  ]}>
+                    All Wards
+                  </Text>
+                  {selectedWard === null && (
+                    <Text style={styles.checkmarkIcon}>✓</Text>
+                  )}
+                </TouchableOpacity>
+
+                {/* Filtered ward options */}
+                {wards
+                  .filter(w => {
+                    if (!activeWardSearchQuery) return true;
+                    return w.Dcd && w.Dcd.toLowerCase().includes(activeWardSearchQuery.toLowerCase());
+                  })
+                  .map((w) => {
+                    const isSelected = selectedWard?.Cd === w.Cd;
+                    return (
+                      <TouchableOpacity
+                        key={w.Cd}
+                        activeOpacity={0.7}
+                        style={[
+                          styles.wardModalItem,
+                          isSelected && styles.wardModalItemActive
+                        ]}
+                        onPress={() => {
+                          setSelectedWard(w);
+                          setShowWardModal(false);
+                        }}
+                      >
+                        <Text style={[
+                          styles.wardModalItemText,
+                          isSelected && styles.wardModalItemTextActive
+                        ]}>
+                          {w.Dcd}
+                        </Text>
+                        {isSelected && (
+                          <Text style={styles.checkmarkIcon}>✓</Text>
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
+              </ScrollView>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -1708,6 +1774,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     maxHeight: '75%',
+    minHeight: 400,
     paddingTop: 20,
     paddingBottom: Platform.OS === 'ios' ? 40 : 24,
     paddingHorizontal: 20,
@@ -1733,14 +1800,19 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: THEME.colors.primary,
   },
+  wardModalSearchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
   wardModalSearchWrapper: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#f1f5f9',
     borderRadius: 10,
     height: 44,
     paddingHorizontal: 12,
-    marginBottom: 16,
   },
   wardModalSearchInput: {
     flex: 1,
@@ -1748,6 +1820,26 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: THEME.colors.textDark,
     height: '100%',
+  },
+  wardModalSearchBtn: {
+    backgroundColor: THEME.colors.primary,
+    borderRadius: 10,
+    height: 44,
+    paddingHorizontal: 16,
+    marginLeft: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  wardModalSearchBtnDisabled: {
+    backgroundColor: '#cbd5e1',
+  },
+  wardModalSearchBtnText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  wardModalSearchBtnTextDisabled: {
+    color: '#64748b',
   },
   wardModalList: {
     maxHeight: 350,
