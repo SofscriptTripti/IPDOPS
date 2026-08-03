@@ -437,7 +437,6 @@ export const DashboardScreen = ({
             <View style={styles.metricCardHeader}>
               <UserIcon color={THEME.colors.textLight} />
               <View style={[styles.metricBadge, { backgroundColor: '#f1f5f9' }]}>
-                <Text style={[styles.metricBadgeText, { color: '#64748b' }]} numberOfLines={1}>+2 TODAY</Text>
               </View>
             </View>
             <View style={styles.metricBottomRow}>

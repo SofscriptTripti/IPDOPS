@@ -17,5 +17,10 @@ export const API_CONFIG = {
     BED_TYPES: '/getBedTypMst',
     CHANGE_BED_STATUS: '/changeBedStatus',
     BED_MST_WITH_PARAM: '/bedMstWithParam',
+    CHAT_UNREAD_COUNT: '/chatUnreadCount',
+    CHAT_GET_OR_CREATE_THREAD: '/chatGetOrCreateThread',
+    CHAT_GET_MESSAGES: '/chatGetMessages',
+    CHAT_SEND_MESSAGE: '/chatSendMessage',
+    CHAT_MARK_READ: '/chatMarkRead',
   },
 };

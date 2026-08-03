@@ -11,6 +11,7 @@ import {
   Platform,
   ActivityIndicator,
   Alert,
+  Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { THEME } from '../constants/theme';
@@ -30,6 +31,8 @@ export const LoginScreen = ({ onLoginSuccess }: LoginScreenProps) => {
   const [keepMeSignedIn, setKeepMeSignedIn] = useState(true);
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [duplicateSessionModalVisible, setDuplicateSessionModalVisible] = useState(false);
+  const [duplicateSessionMessage, setDuplicateSessionMessage] = useState('');
   
   // Interactive border highlights
   const [isUsernameFocused, setIsUsernameFocused] = useState(false);
@@ -59,31 +62,8 @@ export const LoginScreen = ({ onLoginSuccess }: LoginScreenProps) => {
       if (response.success && response.data) {
         onLoginSuccess(response.data);
       } else if (response.errorCode === 'DUPLICATE_SESSION') {
-        Alert.alert(
-          'Duplicate Session',
-          response.message || "User is already logged in. Do you want to force logout the existing session?",
-          [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Force Login',
-              onPress: async () => {
-                setIsLoading(true);
-                try {
-                  const forceResponse = await authService.login(username.trim(), password, true);
-                  setIsLoading(false);
-                  if (forceResponse.success && forceResponse.data) {
-                    onLoginSuccess(forceResponse.data);
-                  } else {
-                    Alert.alert('Sign In Failed', forceResponse.message || 'Invalid credentials.');
-                  }
-                } catch (err: any) {
-                  setIsLoading(false);
-                  Alert.alert('Sign In Error', err.message || 'An error occurred during force login.');
-                }
-              }
-            }
-          ]
-        );
+        setDuplicateSessionMessage(response.message || "User is already logged in. Do you want to force logout the existing session?");
+        setDuplicateSessionModalVisible(true);
       } else {
         Alert.alert('Sign In Failed', response.message || 'Invalid credentials.');
       }
@@ -123,7 +103,7 @@ export const LoginScreen = ({ onLoginSuccess }: LoginScreenProps) => {
   return (
     <View style={styles.container}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.keyboardView}
       >
         <ScrollView
@@ -257,6 +237,58 @@ export const LoginScreen = ({ onLoginSuccess }: LoginScreenProps) => {
           </Text>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Custom Themed Duplicate Session Modal */}
+      <Modal
+        visible={duplicateSessionModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setDuplicateSessionModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+        
+            <Text style={styles.modalTitle}>Duplicate Session</Text>
+            
+            <Text style={styles.modalMessage}>
+              {duplicateSessionMessage}
+            </Text>
+
+            <View style={styles.modalButtonsRow}>
+              <TouchableOpacity
+                activeOpacity={0.8}
+                style={[styles.modalBtn, styles.modalBtnCancel]}
+                onPress={() => setDuplicateSessionModalVisible(false)}
+              >
+                <Text style={styles.modalBtnCancelText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                activeOpacity={0.8}
+                style={[styles.modalBtn, styles.modalBtnConfirm]}
+                onPress={async () => {
+                  setDuplicateSessionModalVisible(false);
+                  setIsLoading(true);
+                  try {
+                    const forceResponse = await authService.login(username.trim(), password, true);
+                    setIsLoading(false);
+                    if (forceResponse.success && forceResponse.data) {
+                      onLoginSuccess(forceResponse.data);
+                    } else {
+                      Alert.alert('Sign In Failed', forceResponse.message || 'Invalid credentials.');
+                    }
+                  } catch (err: any) {
+                    setIsLoading(false);
+                    Alert.alert('Sign In Error', err.message || 'An error occurred during force login.');
+                  }
+                }}
+              >
+                <Text style={styles.modalBtnConfirmText}>Force Login</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -459,5 +491,87 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     marginTop: 4,
     marginBottom: 16,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalContent: {
+    width: '100%',
+    maxWidth: 340,
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#0f172a',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.15,
+        shadowRadius: 16,
+      },
+      android: {
+        elevation: 8,
+      },
+    }),
+  },
+  modalWarningIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(245, 158, 11, 0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalWarningIcon: {
+    fontSize: 28,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: THEME.colors.textDark,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  modalMessage: {
+    fontSize: 14,
+    color: THEME.colors.textMedium,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 24,
+  },
+  modalButtonsRow: {
+    flexDirection: 'row',
+    width: '100%',
+    gap: 12,
+  },
+  modalBtn: {
+    flex: 1,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalBtnCancel: {
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
+  },
+  modalBtnCancelText: {
+    color: THEME.colors.textMedium,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  modalBtnConfirm: {
+    backgroundColor: THEME.colors.primary,
+  },
+  modalBtnConfirmText: {
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: '700',
   },
 });

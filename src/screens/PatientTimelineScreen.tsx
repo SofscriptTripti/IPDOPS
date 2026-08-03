@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   StyleSheet,
   Text,
@@ -21,6 +21,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { THEME } from '../constants/theme';
 import { ExitIcon, EditIcon, DeleteIcon, DeleteEveryoneIcon, CopyIcon, ForwardIcon } from '../components/Icons';
 import { trackerService } from '../services/trackerService';
+import { signalRService } from '../services/signalrService';
 import { UserSessionData } from '../services/authService';
 import { LoadingIndicator } from '../components/LoadingIndicator';
 
@@ -66,32 +67,6 @@ export interface ChatMessage {
   isEdited?: boolean;
 }
 
-const initialDummyMessages: ChatMessage[] = [
-  {
-    id: '1',
-    userId: 'nurse_sarah',
-    userName: 'Nurse Sarah Smith',
-    userRole: 'Nurse Station',
-    text: 'Dr. Rahul visited. Discharge advice has been given. Preparing final issue request.',
-    timestamp: '10:15 AM',
-  },
-  {
-    id: '2',
-    userId: 'pharmacy_johny',
-    userName: 'Johny (Pharmacy)',
-    userRole: 'Pharmacy',
-    text: 'Received last issue return request. Processing pharmacy returns now.',
-    timestamp: '10:22 AM',
-  },
-  {
-    id: '3',
-    userId: 'billing_preeti',
-    userName: 'Preeti Sharma',
-    userRole: 'Billing',
-    text: 'Pending pharmacy clearance before we can generate the final bill. Please expedite pharmacy returns.',
-    timestamp: '10:30 AM',
-  },
-];
 
 interface PatientTimelineScreenProps {
   patient: PatientSessionDetails;
@@ -142,6 +117,21 @@ const formatTatEquation = (
   return `${labelEnd} (${endStr}) - ${labelStart} (${startStr}) = ${diffVal}`;
 };
 
+const formatMsgTime = (dtStr: string) => {
+  try {
+    const d = new Date(dtStr);
+    if (isNaN(d.getTime())) return dtStr;
+    let hours = d.getHours();
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours ? hours : 12;
+    return `${hours}:${minutes} ${ampm}`;
+  } catch {
+    return dtStr;
+  }
+};
+
 export const PatientTimelineScreen = ({ 
   patient, 
   onBack, 
@@ -154,6 +144,10 @@ export const PatientTimelineScreen = ({
   const [activePatient, setActivePatient] = useState<PatientSessionDetails>(patient);
   const [isLoading, setIsLoading] = useState(!hasLoadedOnce);
   const [isFetchingLive, setIsFetchingLive] = useState(true);
+
+  const [threadId, setThreadId] = useState<number | null>(null);
+  const [unreadCount, setUnreadCount] = useState<number>(0);
+  const [isFetchingChat, setIsFetchingChat] = useState(false);
 
   // Draggable Floating Chat Button Setup
   const pan = useRef(new Animated.ValueXY()).current;
@@ -185,13 +179,12 @@ export const PatientTimelineScreen = ({
         pan.flattenOffset();
         // If movement was small, register it as a click/tap to toggle modal
         if (Math.abs(gestureState.dx) < 6 && Math.abs(gestureState.dy) < 6) {
-          showCustomAlert('Under Implementation', 'This feature is under implementation.', 'info');
+          handleOpenChat();
         }
       }
     })
   ).current;
-  
-  const [messages, setMessages] = useState<ChatMessage[]>(initialDummyMessages);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessageText, setNewMessageText] = useState('');
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [activeActionMessageId, setActiveActionMessageId] = useState<string | null>(null);
@@ -220,7 +213,270 @@ export const PatientTimelineScreen = ({
   const flatListRef = useRef<FlatList>(null);
   const chatInputRef = useRef<TextInput>(null);
 
-  const handleSendMessage = () => {
+  const loadChatStatus = useCallback(async () => {
+    try {
+      const ipNoNum = parseInt(String(activePatient.ipNo || '').replace(/[^0-9]/g, ''), 10) || 0;
+      if (!ipNoNum) return;
+
+      const res = await trackerService.chatUnreadCount(sessionData.token, {
+        cocd: sessionData.coCd || "1",
+        div: sessionData.div || 1,
+        loc: sessionData.loc || 1,
+        ipNo: ipNoNum,
+        userId: sessionData.userId
+      });
+
+      if (res && res.success && res.data) {
+        setUnreadCount(res.data.unreadCount || 0);
+        if (res.data.threadId) {
+          setThreadId(res.data.threadId);
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to load chat status:', err);
+    }
+  }, [activePatient.ipNo, sessionData]);
+
+  const joinSignalRGroup = useCallback(async (targetThreadId: number) => {
+    if (!signalRService.isConnected) {
+      console.log('[SignalR] Connection is not active. Attempting to start connection before group join...');
+      try {
+        await signalRService.startConnection(sessionData.token, sessionData.userId);
+      } catch (err) {
+        console.warn('[SignalR] Failed to establish connection during group join:', err);
+        return;
+      }
+    }
+    const methods = [
+      'JoinGroup', 'JoinThread', 'JoinRoom', 'ConnectToThread', 
+      'SubscribeToThread', 'Subscribe', 'JoinChat', 'joinChat', 
+      'ConnectChat', 'join', 'Join'
+    ];
+    
+    // Construct all possible group name formats
+    const groupNames = [
+      targetThreadId,
+      String(targetThreadId),
+      `thread_${targetThreadId}`,
+      `Thread_${targetThreadId}`,
+      `chat_${targetThreadId}`,
+      `Chat_${targetThreadId}`,
+      `group_${targetThreadId}`,
+      `Group_${targetThreadId}`
+    ];
+    
+    for (const method of methods) {
+      for (const groupName of groupNames) {
+        // 1. Try single argument
+        try {
+          await signalRService.invokeHubMethod(method, groupName);
+          console.log(`[SignalR] Success: ${method}(${typeof groupName === 'string' ? `"${groupName}"` : groupName})`);
+        } catch (e) {}
+
+        // 2. Try two arguments (userId, groupName)
+        try {
+          await signalRService.invokeHubMethod(method, sessionData.userId, groupName);
+          console.log(`[SignalR] Success: ${method}("${sessionData.userId}", ${typeof groupName === 'string' ? `"${groupName}"` : groupName})`);
+        } catch (e) {}
+
+        // 3. Try two arguments (groupName, userId)
+        try {
+          await signalRService.invokeHubMethod(method, groupName, sessionData.userId);
+          console.log(`[SignalR] Success: ${method}(${typeof groupName === 'string' ? `"${groupName}"` : groupName}, "${sessionData.userId}")`);
+        } catch (e) {}
+      }
+    }
+    console.log(`[SignalR] All group join invocation attempts completed for thread: ${targetThreadId}`);
+  }, [sessionData.userId]);
+
+  const fetchMessages = useCallback(async (targetThreadId: number) => {
+    setIsFetchingChat(true);
+    // Notify the backend hub that we are joining this chat group
+    joinSignalRGroup(targetThreadId);
+    try {
+      const res = await trackerService.chatGetMessages(sessionData.token, {
+        threadId: targetThreadId,
+        userId: sessionData.userId,
+        afterMsgId: 0,
+        beforeMsgId: 0,
+        pageSize: 100
+      });
+
+      if (res && res.success && Array.isArray(res.data)) {
+        const mapped = res.data.map((m: any) => ({
+          id: String(m.msgId),
+          userId: m.senderUsrId || m.senderUserId || '',
+          userName: m.senderName || 'Staff',
+          userRole: (m.senderUsrId || m.senderUserId) === sessionData.userId ? 'Me' : 'Team Member',
+          text: m.msgText,
+          timestamp: formatMsgTime(m.crtDtTm),
+        }));
+        setMessages(mapped);
+
+        // Mark as read if there are messages
+        if (mapped.length > 0) {
+          const maxMsgId = Math.max(...res.data.map((m: any) => m.msgId));
+          trackerService.chatMarkRead(sessionData.token, {
+            threadId: targetThreadId,
+            userId: sessionData.userId,
+            lastReadMsgId: maxMsgId
+          }).then(() => {
+            setUnreadCount(0);
+          }).catch(e => console.warn('Failed to mark read:', e));
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to fetch chat messages:', err);
+    } finally {
+      setIsFetchingChat(false);
+    }
+  }, [sessionData]);
+
+  const handleOpenChat = async () => {
+    setIsChatModalVisible(true);
+    let activeThreadId = threadId;
+
+    if (!activeThreadId) {
+      setIsFetchingChat(true);
+      try {
+        const ipNoNum = parseInt(String(activePatient.ipNo || '').replace(/[^0-9]/g, ''), 10) || 0;
+        const res = await trackerService.chatGetOrCreateThread(sessionData.token, {
+          cocd: sessionData.coCd || "1",
+          div: sessionData.div || 1,
+          loc: sessionData.loc || 1,
+          ipNo: ipNoNum,
+          ptnNo: 0,
+          title: activePatient.name || 'Patient Chat',
+          userId: sessionData.userId,
+          userName: sessionData.userNickName || 'Staff'
+        });
+
+        if (res && res.success && res.data && res.data.threadId) {
+          activeThreadId = res.data.threadId;
+          setThreadId(activeThreadId);
+        }
+      } catch (err) {
+        console.warn('Failed to get/create chat thread:', err);
+      } finally {
+        setIsFetchingChat(false);
+      }
+    }
+
+    if (activeThreadId) {
+      fetchMessages(activeThreadId);
+    }
+  };
+
+  useEffect(() => {
+    loadChatStatus();
+    const interval = setInterval(loadChatStatus, 15000);
+    return () => clearInterval(interval);
+  }, [loadChatStatus]);
+
+  const threadIdRef = useRef<number | null>(null);
+  const isChatModalVisibleRef = useRef(false);
+
+  useEffect(() => {
+    threadIdRef.current = threadId;
+  }, [threadId]);
+
+  useEffect(() => {
+    isChatModalVisibleRef.current = isChatModalVisible;
+  }, [isChatModalVisible]);
+
+  useEffect(() => {
+    if (!sessionData) return;
+
+    console.log('[SignalR] Connecting to CareWorksOne chat hub...');
+    signalRService.startConnection(sessionData.token, sessionData.userId)
+      .then(() => {
+        // If threadId is already active, make sure we join the group
+        if (threadIdRef.current) {
+          joinSignalRGroup(threadIdRef.current);
+        }
+      })
+      .catch(err => console.warn('[SignalR] Failed to start connection on mount:', err));
+
+    const handleReceiveMessage = (msg: any) => {
+      console.log('[SignalR] Received message callback:', msg);
+      if (!msg) return;
+      
+      const msgThreadId = msg.threadId ?? msg.ThreadId;
+      const msgId = msg.msgId ?? msg.MsgId;
+      const senderUsrId = msg.senderUsrId ?? msg.SenderUsrId ?? msg.senderUserId ?? msg.SenderUserId;
+      const senderName = msg.senderName ?? msg.SenderName;
+      const msgText = msg.msgText ?? msg.MsgText;
+      const crtDtTm = msg.crtDtTm ?? msg.CrtDtTm;
+
+      const currentThreadId = threadIdRef.current;
+      if (currentThreadId && msgThreadId && String(msgThreadId) === String(currentThreadId)) {
+        const newMsg = {
+          id: String(msgId || Date.now()),
+          userId: senderUsrId || '',
+          userName: senderName || 'Staff',
+          userRole: senderUsrId === sessionData.userId ? 'Me' : 'Team Member',
+          text: msgText || '',
+          timestamp: formatMsgTime(crtDtTm || new Date().toISOString()),
+        };
+        
+        setMessages(prev => {
+          if (prev.some(m => m.id === newMsg.id)) return prev;
+          return [...prev, newMsg];
+        });
+
+        if (isChatModalVisibleRef.current) {
+          trackerService.chatMarkRead(sessionData.token, {
+            threadId: currentThreadId,
+            userId: sessionData.userId,
+            lastReadMsgId: Number(msgId) || 0
+          }).catch(e => console.warn('[SignalR] failed to mark read:', e));
+        }
+      } else {
+        setUnreadCount(prev => prev + 1);
+      }
+    };
+
+    const handleUnreadCountUpdate = (data: any) => {
+      console.log('[SignalR] Received unread count callback:', data);
+      if (!data) return;
+      const ipNoVal = data.ipNo ?? data.IpNo ?? data.IPNo;
+      const unreadCountVal = data.unreadCount ?? data.UnreadCount;
+      const activeIpClean = String(activePatient.ipNo || '').replace(/[^0-9]/g, '');
+      if (ipNoVal && (String(ipNoVal) === String(activePatient.ipNo) || String(ipNoVal) === activeIpClean)) {
+        setUnreadCount(unreadCountVal ?? 0);
+      }
+    };
+
+    const handleRefresh = () => {
+      console.log('[SignalR] Generic chat refresh signal received.');
+      const currentThreadId = threadIdRef.current;
+      if (currentThreadId) {
+        fetchMessages(currentThreadId);
+      }
+    };
+
+    signalRService.subscribeToReceiveMessage(handleReceiveMessage);
+    signalRService.subscribeToUnreadCount(handleUnreadCountUpdate);
+    signalRService.subscribeToRefresh(handleRefresh);
+
+    return () => {
+      signalRService.unsubscribeFromReceiveMessage(handleReceiveMessage);
+      signalRService.unsubscribeFromUnreadCount(handleUnreadCountUpdate);
+      signalRService.unsubscribeFromRefresh(handleRefresh);
+      signalRService.stopConnection().catch(err => console.warn('[SignalR] Failed to stop connection on unmount:', err));
+    };
+  }, [sessionData]);
+
+  useEffect(() => {
+    if (isChatModalVisible && messages.length > 0) {
+      const timer = setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 200);
+      return () => clearTimeout(timer);
+    }
+  }, [isChatModalVisible, messages.length]);
+
+  const handleSendMessage = async () => {
     if (!newMessageText.trim()) return;
     
     if (editingMessageId) {
@@ -236,25 +492,53 @@ export const PatientTimelineScreen = ({
       return;
     }
 
-    const now = new Date();
-    let hours = now.getHours();
-    const minutes = String(now.getMinutes()).padStart(2, '0');
-    const ampm = hours >= 12 ? 'PM' : 'AM';
-    hours = hours % 12;
-    hours = hours ? hours : 12;
-    const timestampStr = `${hours}:${minutes} ${ampm}`;
+    let activeThreadId = threadId;
+    if (!activeThreadId) {
+      try {
+        const ipNoNum = parseInt(String(activePatient.ipNo || '').replace(/[^0-9]/g, ''), 10) || 0;
+        const res = await trackerService.chatGetOrCreateThread(sessionData.token, {
+          cocd: sessionData.coCd || "1",
+          div: sessionData.div || 1,
+          loc: sessionData.loc || 1,
+          ipNo: ipNoNum,
+          ptnNo: 0,
+          title: activePatient.name || 'Patient Chat',
+          userId: sessionData.userId,
+          userName: sessionData.userNickName || 'Staff'
+        });
 
-    const newMsg: ChatMessage = {
-      id: String(messages.length + 1) + '_' + Date.now(),
-      userId: sessionData.userId || 'self',
-      userName: sessionData.userNickName || 'Me',
-      userRole: 'Team Member',
-      text: newMessageText.trim(),
-      timestamp: timestampStr,
-    };
+        if (res && res.success && res.data && res.data.threadId) {
+          activeThreadId = res.data.threadId;
+          setThreadId(activeThreadId);
+        }
+      } catch (err) {
+        console.warn('Failed to create thread on send:', err);
+        showCustomAlert('Error', 'Unable to start chat connection.', 'warning');
+        return;
+      }
+    }
 
-    setMessages(prev => [...prev, newMsg]);
+    if (!activeThreadId) return;
+
+    const messageContent = newMessageText.trim();
     setNewMessageText('');
+
+    try {
+      const res = await trackerService.chatSendMessage(sessionData.token, {
+        threadId: activeThreadId,
+        userId: sessionData.userId,
+        userName: sessionData.userNickName || 'Staff',
+        msgText: messageContent,
+        parentMsgId: null
+      });
+
+      if (res && res.success) {
+        fetchMessages(activeThreadId);
+      }
+    } catch (err) {
+      console.warn('Failed to send chat message:', err);
+      showCustomAlert('Error', 'Failed to send message. Please retry.', 'warning');
+    }
   };
 
   const handleDeletePress = (message: ChatMessage) => {
@@ -658,7 +942,7 @@ export const PatientTimelineScreen = ({
             </Text>
             {activePatient.ipNo ? (
               <Text style={styles.patientIpBadge}>
-                {activePatient.ipNo.startsWith('IP') ? activePatient.ipNo : `IP ${activePatient.ipNo}`}
+                {String(activePatient.ipNo).startsWith('IP') ? activePatient.ipNo : `IP ${activePatient.ipNo}`}
               </Text>
             ) : null}
           </View>
@@ -811,7 +1095,7 @@ export const PatientTimelineScreen = ({
 
       </ScrollView>
 
-      {/* Draggable Floating Chat Log Button - Commented out as requested
+      {/* Draggable Floating Chat Log Button */}
       <Animated.View
         {...panResponder.panHandlers}
         style={[
@@ -823,65 +1107,72 @@ export const PatientTimelineScreen = ({
       >
         <TouchableOpacity
           activeOpacity={0.8}
-          onPress={() => showCustomAlert('Under Implementation', 'This feature is under implementation.', 'info')}
+          onPress={handleOpenChat}
           style={styles.floatingChatBtnInner}
         >
           <Text style={styles.floatingChatText}>Chat Log</Text>
           <Text style={styles.floatingChatIcon}>💬</Text>
+          {unreadCount > 0 && (
+            <View style={styles.unreadBadge}>
+              <Text style={styles.unreadBadgeText}>
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </Text>
+            </View>
+          )}
         </TouchableOpacity>
       </Animated.View>
-      */}
+     
 
       {/* Communication Chat Modal */}
-      {false && isChatModalVisible && (
+      {isChatModalVisible && (
         <Modal
           visible={isChatModalVisible}
           transparent={true}
           animationType="slide"
           onRequestClose={() => setIsChatModalVisible(false)}
         >
-          <TouchableOpacity 
-            activeOpacity={1}
-            style={styles.chatModalOverlay}
-            onPress={() => setIsChatModalVisible(false)}
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={{ flex: 1 }}
           >
             <TouchableOpacity 
               activeOpacity={1}
-              style={[styles.chatContainer, { marginTop: insets.top + 50 }]}
+              style={styles.chatModalOverlay}
+              onPress={() => setIsChatModalVisible(false)}
             >
-              <StatusBar barStyle="light-content" backgroundColor={THEME.colors.primary} translucent />
-              
-              {/* Chat Header */}
-              <View style={styles.chatHeader}>
-                <View style={styles.sheetHandleContainer}>
-                  <View style={styles.sheetHandle} />
-                </View>
-                <View style={styles.chatHeaderContent}>
-                  <TouchableOpacity 
-                    activeOpacity={0.7} 
-                    style={styles.chatHeaderBackBtn}
-                    onPress={() => setIsChatModalVisible(false)}
-                  >
-                    <View style={styles.chatBackArrow} />
-                  </TouchableOpacity>
-                  
-                  <View style={styles.chatHeaderTitleContainer}>
-                    <Text style={styles.chatHeaderTitle} numberOfLines={1}>{activePatient.name}</Text>
-                    <Text style={styles.chatHeaderSubtitle}>
-                      {activePatient.ipNo} • {activePatient.bed} • {activePatient.ward}
-                    </Text>
-                  </View>
-                  
-                  <View style={styles.chatHeaderRightPlaceholder} />
-                </View>
-              </View>
-              
-              {/* Messages Area */}
-              <KeyboardAvoidingView
-                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-                style={{ flex: 1 }}
-                keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 50 : 0}
+              <TouchableOpacity 
+                activeOpacity={1}
+                style={[styles.chatContainer, { marginTop: insets.top + 50 }]}
               >
+                <StatusBar barStyle="light-content" backgroundColor={THEME.colors.primary} translucent />
+                
+                {/* Chat Header */}
+                <View style={styles.chatHeader}>
+                  <View style={styles.sheetHandleContainer}>
+                    <View style={styles.sheetHandle} />
+                  </View>
+                  <View style={styles.chatHeaderContent}>
+                    <TouchableOpacity 
+                      activeOpacity={0.7} 
+                      style={styles.chatHeaderBackBtn}
+                      onPress={() => setIsChatModalVisible(false)}
+                    >
+                      <View style={styles.chatBackArrow} />
+                    </TouchableOpacity>
+                    
+                    <View style={styles.chatHeaderTitleContainer}>
+                      <Text style={styles.chatHeaderTitle} numberOfLines={1}>{activePatient.name}</Text>
+                      <Text style={styles.chatHeaderSubtitle}>
+                        {activePatient.ipNo} • {activePatient.bed} • {activePatient.ward}
+                      </Text>
+                    </View>
+                    
+                    <View style={styles.chatHeaderRightPlaceholder} />
+                  </View>
+                </View>
+                
+                {/* Messages Area */}
+                <View style={{ flex: 1 }}>
                 {/* Click-catcher backdrop to dismiss active tooltip */}
                 {activeActionMessageId !== null && (
                   <TouchableOpacity
@@ -891,8 +1182,13 @@ export const PatientTimelineScreen = ({
                   />
                 )}
                 
-                <FlatList
-                  ref={flatListRef}
+                {isFetchingChat && messages.length === 0 ? (
+                  <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                    <ActivityIndicator size="large" color={THEME.colors.primary} />
+                  </View>
+                ) : (
+                  <FlatList
+                    ref={flatListRef}
                   data={messages}
                   keyExtractor={(item) => item.id}
                   contentContainerStyle={styles.chatListContent}
@@ -991,6 +1287,7 @@ export const PatientTimelineScreen = ({
                   onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
                   onLayout={() => flatListRef.current?.scrollToEnd({ animated: true })}
                 />
+              )}
                 
                 {/* Editing Banner */}
                 {editingMessageId !== null && (
@@ -1031,7 +1328,7 @@ export const PatientTimelineScreen = ({
                     <Text style={styles.chatSendBtnText}>{editingMessageId ? 'Save' : 'Send'}</Text>
                   </TouchableOpacity>
                 </View>
-              </KeyboardAvoidingView>
+              </View>
             </TouchableOpacity>
 
             {/* Toast Notification (centered globally) */}
@@ -1043,7 +1340,8 @@ export const PatientTimelineScreen = ({
               </View>
             )}
           </TouchableOpacity>
-        </Modal>
+        </KeyboardAvoidingView>
+      </Modal>
       )}
 
       {/* Custom Themed Alert Modal */}
@@ -1794,5 +2092,24 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     textAlign: 'center',
     lineHeight: 13,
+  },
+  unreadBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    backgroundColor: '#ef4444',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 1.5,
+    borderColor: '#ffffff',
+  },
+  unreadBadgeText: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: 'bold',
   },
 });

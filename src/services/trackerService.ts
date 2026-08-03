@@ -503,4 +503,286 @@ export const trackerService = {
       throw error;
     }
   },
+
+  /**
+   * Fetches unread chat message count.
+   */
+  async chatUnreadCount(
+    token: string,
+    payload: {
+      cocd: string;
+      div: number;
+      loc: number;
+      ipNo: number;
+      userId: string;
+    }
+  ): Promise<any> {
+    const url = `${API_CONFIG.CAREWORKS_BASE_URL}${API_CONFIG.ENDPOINTS.CHAT_UNREAD_COUNT}`;
+
+    console.log('====================================');
+    console.log('API CHAT UNREAD COUNT HIT:');
+    console.log('URL:', url);
+    console.log('PARAMS:', JSON.stringify(payload, null, 2));
+    console.log('TOKEN:', token ? `${token.substring(0, 15)}...` : 'NONE');
+    console.log('====================================');
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const text = await response.text();
+      let parsedData: any;
+      try {
+        parsedData = JSON.parse(text);
+      } catch (err) {
+        console.log('====================================');
+        console.log('API CHAT UNREAD COUNT PARSE ERROR (raw):', text);
+        console.log('====================================');
+        throw new Error(`Invalid response format: ${response.status}`);
+      }
+
+      console.log('====================================');
+      console.log('API CHAT UNREAD COUNT RESPONSE:');
+      console.log('STATUS:', response.status);
+      console.log('DATA:', JSON.stringify(parsedData, null, 2));
+      console.log('====================================');
+
+      return parsedData;
+    } catch (error: any) {
+      console.log('====================================');
+      console.log('API CHAT UNREAD COUNT EXCEPTION:', error);
+      console.log('====================================');
+      throw error;
+    }
+  },
+
+  /**
+   * Gets or creates a chat thread.
+   */
+  async chatGetOrCreateThread(
+    token: string,
+    payload: {
+      cocd: string;
+      div: number;
+      loc: number;
+      ipNo: number;
+      ptnNo: number;
+      title: string;
+      userId: string;
+      userName: string;
+    }
+  ): Promise<any> {
+    const url = `${API_CONFIG.CAREWORKS_BASE_URL}${API_CONFIG.ENDPOINTS.CHAT_GET_OR_CREATE_THREAD}`;
+
+    console.log('====================================');
+    console.log('API CHAT GET OR CREATE THREAD HIT:');
+    console.log('URL:', url);
+    console.log('PARAMS:', JSON.stringify(payload, null, 2));
+    console.log('TOKEN:', token ? `${token.substring(0, 15)}...` : 'NONE');
+    console.log('====================================');
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const text = await response.text();
+      let parsedData: any;
+      try {
+        parsedData = JSON.parse(text);
+      } catch (err) {
+        console.log('====================================');
+        console.log('API CHAT GET OR CREATE THREAD PARSE ERROR (raw):', text);
+        console.log('====================================');
+        throw new Error(`Invalid response format: ${response.status}`);
+      }
+
+      console.log('====================================');
+      console.log('API CHAT GET OR CREATE THREAD RESPONSE:');
+      console.log('STATUS:', response.status);
+      console.log('DATA:', JSON.stringify(parsedData, null, 2));
+      console.log('====================================');
+
+      return parsedData;
+    } catch (error: any) {
+      console.log('====================================');
+      console.log('API CHAT GET OR CREATE THREAD EXCEPTION:', error);
+      console.log('====================================');
+      throw error;
+    }
+  },
+
+  /**
+   * Fetches chat messages list.
+   */
+  async chatGetMessages(
+    token: string,
+    payload: {
+      threadId: number;
+      userId: string;
+      afterMsgId: number;
+      beforeMsgId: number;
+      pageSize: number;
+    }
+  ): Promise<any> {
+    const url = `${API_CONFIG.CAREWORKS_BASE_URL}${API_CONFIG.ENDPOINTS.CHAT_GET_MESSAGES}`;
+
+    console.log('====================================');
+    console.log('API CHAT GET MESSAGES HIT:');
+    console.log('URL:', url);
+    console.log('PARAMS:', JSON.stringify(payload, null, 2));
+    console.log('TOKEN:', token ? `${token.substring(0, 15)}...` : 'NONE');
+    console.log('====================================');
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const text = await response.text();
+      let parsedData: any;
+      try {
+        parsedData = JSON.parse(text);
+      } catch (err) {
+        console.log('====================================');
+        console.log('API CHAT GET MESSAGES PARSE ERROR (raw):', text);
+        console.log('====================================');
+        throw new Error(`Invalid response format: ${response.status}`);
+      }
+
+      console.log('====================================');
+      console.log('API CHAT GET MESSAGES RESPONSE:');
+      console.log('STATUS:', response.status);
+      console.log('DATA:', JSON.stringify(parsedData, null, 2));
+      console.log('====================================');
+
+      return parsedData;
+    } catch (error: any) {
+      console.log('====================================');
+      console.log('API CHAT GET MESSAGES EXCEPTION:', error);
+      console.log('====================================');
+      throw error;
+    }
+  },
+
+  /**
+   * Sends a chat message.
+   */
+  async chatSendMessage(
+    token: string,
+    payload: {
+      threadId: number;
+      userId: string;
+      userName: string;
+      msgText: string;
+      parentMsgId: number | null;
+    }
+  ): Promise<any> {
+    const url = `${API_CONFIG.CAREWORKS_BASE_URL}${API_CONFIG.ENDPOINTS.CHAT_SEND_MESSAGE}`;
+
+    console.log('====================================');
+    console.log('API CHAT SEND MESSAGE HIT:');
+    console.log('URL:', url);
+    console.log('PARAMS:', JSON.stringify(payload, null, 2));
+    console.log('TOKEN:', token ? `${token.substring(0, 15)}...` : 'NONE');
+    console.log('====================================');
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const text = await response.text();
+      let parsedData: any;
+      try {
+        parsedData = JSON.parse(text);
+      } catch (err) {
+        console.log('====================================');
+        console.log('API CHAT SEND MESSAGE PARSE ERROR (raw):', text);
+        console.log('====================================');
+        throw new Error(`Invalid response format: ${response.status}`);
+      }
+
+      console.log('====================================');
+      console.log('API CHAT SEND MESSAGE RESPONSE:');
+      console.log('STATUS:', response.status);
+      console.log('DATA:', JSON.stringify(parsedData, null, 2));
+      console.log('====================================');
+
+      return parsedData;
+    } catch (error: any) {
+      console.log('====================================');
+      console.log('API CHAT SEND MESSAGE EXCEPTION:', error);
+      console.log('====================================');
+      throw error;
+    }
+  },
+
+  /**
+   * Marks chat messages as read.
+   */
+  async chatMarkRead(
+    token: string,
+    payload: {
+      threadId: number;
+      userId: string;
+      lastReadMsgId: number;
+    }
+  ): Promise<any> {
+    const url = `${API_CONFIG.CAREWORKS_BASE_URL}${API_CONFIG.ENDPOINTS.CHAT_MARK_READ}`;
+
+    console.log('URL:', url);
+    console.log('PARAMS:', JSON.stringify(payload, null, 2));
+    console.log('TOKEN:', token ? `${token.substring(0, 15)}...` : 'NONE');
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const text = await response.text();
+      let parsedData: any;
+      try {
+        parsedData = JSON.parse(text);
+      } catch (err) {
+        console.log('API CHAT MARK READ PARSE ERROR (raw):', text);
+        throw new Error(`Invalid response format: ${response.status}`);
+      }
+
+ 
+      console.log('STATUS:', response.status);
+      console.log('DATA:', JSON.stringify(parsedData, null, 2));
+
+      return parsedData;
+    } catch (error: any) {
+      console.log('API CHAT MARK READ EXCEPTION:', error);
+      throw error;
+    }
+  },
 };
