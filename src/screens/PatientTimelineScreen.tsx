@@ -30,6 +30,7 @@ export interface TimelineStage {
   name: string;
   time: string;
   diffText?: string;
+  oldDiffText?: string;
   status: 'green' | 'orange' | 'red' | 'white';
   tatLimit?: string;
 }
@@ -54,6 +55,9 @@ export interface PatientSessionDetails {
   tpaAprDtTm?: string | null;
   tpaAprAmt?: string | number | null;
   lastBillPreparedBy?: string | null;
+  totalTat?: string;
+  bedTurnoverTat?: string;
+  remarks?: string | null;
 }
 
 export interface ChatMessage {
@@ -115,6 +119,30 @@ const formatTatEquation = (
   const startStr = formatTimeOnly(timeStart);
   const endStr = formatTimeOnly(timeEnd);
   return `${labelEnd} (${endStr}) - ${labelStart} (${startStr}) = ${diffVal}`;
+};
+
+const getStageColorCode = (p: any, sIdx: number): number => {
+  if (p.NewStageColors) {
+    const arr = p.NewStageColors.split(',');
+    if (arr[sIdx] !== undefined) {
+      return parseInt(arr[sIdx], 10) || 0;
+    }
+  }
+  const key = `NewT${sIdx + 1}Status`;
+  if (p[key] !== undefined && p[key] !== null) {
+    return parseInt(p[key], 10) || 0;
+  }
+  if (p.StageColors) {
+    const arr = p.StageColors.split(',');
+    if (arr[sIdx] !== undefined) {
+      return parseInt(arr[sIdx], 10) || 0;
+    }
+  }
+  const oldKey = `T${sIdx + 1}Status`;
+  if (p[oldKey] !== undefined && p[oldKey] !== null) {
+    return parseInt(p[oldKey], 10) || 0;
+  }
+  return 0;
 };
 
 const formatMsgTime = (dtStr: string) => {
@@ -669,93 +697,109 @@ export const PatientTimelineScreen = ({
             
             const stageNames = [
               'Discharge Advice',
-              'Last Issue Request (Nurse Station)',
+              'Discharge Summary (Provisional)',
+              'Last Indent by Nursing',
               'Last Issue by Pharmacy',
               'Last Issue Return Request (Nurse)',
-              'Last Issue Return by Pharmacy',
-              'Visitsheet / Voucher to Billing',
-              'Discharge Summary (Provisional)',
+              'Last Return Acknowledged by Pharmacy',
+              'Last Nursing Acknowledgement',
               'Discharge Summary (Final)',
-              'Discharge Bill Preparation',
-              'Discharge Bill Approval',
-              'Bill Handed to Patient/Sponsor',
-              'Discharge Voucher Verification',
-              'Patient Discharge / Bed Vacated'
+              'Last Bill Prepared',
+              'Bill Handed Over to Relative',
+              'Bill Sent to TPA',
+              'Sent for Claim Approval',
+              'TPA Approved',
+              'Final Billing Settlement',
+              'Bed Vacant Time / Pt. Physically Left',
+              'Bed Ready'
             ];
 
             const formattedStages = stageNames.map((name, sIdx) => {
-              let colorCode = 0;
+              let colorCode = getStageColorCode(p, sIdx);
               let timeStr = '';
               let diffText = '';
+              let oldDiffText = '';
 
               switch (sIdx) {
                 case 0: // T1: Discharge Advice
                   timeStr = p.DschgAdvGivenTm || '';
-                  const t1Status = patient.stages[0]?.status || 'white';
-                  colorCode = t1Status === 'green' ? 1 : t1Status === 'orange' ? 2 : t1Status === 'red' ? 3 : 0;
                   diffText = '-';
+                  oldDiffText = '-';
                   break;
-                case 1: // T2: Last Issue Request
-                  timeStr = p.LastIssueReqDtTm || '';
-                  colorCode = p.TATLastIssueReqDtTmTAT ?? 0;
-                  diffText = formatTatEquation('T1', 'T2', p.DschgAdvGivenTm, p.LastIssueReqDtTm);
-                  break;
-                case 2: // T3: Last Issue Pharmacy
-                  timeStr = p.LastIssDtTm || '';
-                  colorCode = p.TATLastIssDtTmTAT ?? 0;
-                  diffText = formatTatEquation('T1', 'T3', p.DschgAdvGivenTm, p.LastIssDtTm);
-                  break;
-                case 3: // T4: Last Issue Return Request
-                  timeStr = p.LastIssReturnReqDtTm || '';
-                  colorCode = p.TATLastIssReturnReqDtTmTAT ?? 0;
-                  diffText = formatTatEquation('T1', 'T4', p.DschgAdvGivenTm, p.LastIssReturnReqDtTm);
-                  break;
-                case 4: // T5: Last Issue Return Pharmacy
-                  timeStr = p.LastIssReturnDtTm || '';
-                  colorCode = p.TATLastIssReturnDtTmTAT ?? 0;
-                  diffText = formatTatEquation('T1', 'T5', p.DschgAdvGivenTm, p.LastIssReturnDtTm);
-                  break;
-                case 5: // T6: Visitsheet / Voucher to Billing
-                  timeStr = p.LastBillDtTm || '';
-                  const t6Status = patient.stages[5]?.status || 'white';
-                  colorCode = t6Status === 'green' ? 1 : t6Status === 'orange' ? 2 : t6Status === 'red' ? 3 : 0;
-                  diffText = formatTatEquation('T5', 'T6', p.LastIssReturnDtTm, p.LastBillDtTm);
-                  break;
-                case 6: // T7: Discharge Summary Provisional
+                case 1: // T2: Discharge Summary (Provisional)
                   timeStr = p.DschgSumProvDtTm || '';
-                  colorCode = p.TATDschgSumProvDtTm ?? 0;
-                  diffText = formatTatEquation('T1', 'T7', p.DschgAdvGivenTm, p.DschgSumProvDtTm);
+                  diffText = formatTatEquation('T1', 'T2', p.DschgAdvGivenTm, p.DschgSumProvDtTm);
+                  oldDiffText = formatTatEquation('T1', 'T2', p.DschgAdvGivenTm, p.DschgSumProvDtTm);
                   break;
-                case 7: // T8: Discharge Summary Final
+                case 2: // T3: Last Indent by Nursing
+                  timeStr = p.LastIssueReqDtTm || '';
+                  diffText = formatTatEquation('T2', 'T3', p.DschgSumProvDtTm, p.LastIssueReqDtTm);
+                  oldDiffText = formatTatEquation('T1', 'T3', p.DschgAdvGivenTm, p.LastIssueReqDtTm);
+                  break;
+                case 3: // T4: Last Issue by Pharmacy
+                  timeStr = p.LastIssDtTm || '';
+                  diffText = formatTatEquation('T3', 'T4', p.LastIssueReqDtTm, p.LastIssDtTm);
+                  oldDiffText = formatTatEquation('T1', 'T4', p.DschgAdvGivenTm, p.LastIssDtTm);
+                  break;
+                case 4: // T5: Last Issue Return Request (Nurse)
+                  timeStr = p.LastIssReturnReqDtTm || '';
+                  diffText = formatTatEquation('T4', 'T5', p.LastIssDtTm, p.LastIssReturnReqDtTm);
+                  oldDiffText = formatTatEquation('T1', 'T5', p.DschgAdvGivenTm, p.LastIssReturnReqDtTm);
+                  break;
+                case 5: // T6: Last Return Acknowledged by Pharmacy
+                  timeStr = p.LastIssReturnDtTm || '';
+                  diffText = formatTatEquation('T5', 'T6', p.LastIssReturnReqDtTm, p.LastIssReturnDtTm);
+                  oldDiffText = formatTatEquation('T1', 'T6', p.DschgAdvGivenTm, p.LastIssReturnDtTm);
+                  break;
+                case 6: // T7: Last Nursing Acknowledgement
+                  timeStr = p.LastAcknIssDtTm || '';
+                  diffText = formatTatEquation('T6', 'T7', p.LastIssReturnDtTm, p.LastAcknIssDtTm);
+                  oldDiffText = formatTatEquation('T1', 'T7', p.DschgAdvGivenTm, p.LastAcknIssDtTm);
+                  break;
+                case 7: // T8: Discharge Summary (Final)
                   timeStr = p.DschgSumFinalDtTm || '';
-                  colorCode = p.TATDschgSumFinalTAT ?? 0;
-                  diffText = formatTatEquation('T1', 'T8', p.DschgAdvGivenTm, p.DschgSumFinalDtTm);
+                  diffText = '-';
+                  oldDiffText = formatTatEquation('T1', 'T8', p.DschgAdvGivenTm, p.DschgSumFinalDtTm);
                   break;
-                case 8: // T9: Discharge Bill Preparation
+                case 8: // T9: Last Bill Prepared
                   timeStr = p.LastBillDtTm || '';
-                  const t9Status = patient.stages[8]?.status || 'white';
-                  colorCode = t9Status === 'green' ? 1 : t9Status === 'orange' ? 2 : t9Status === 'red' ? 3 : 0;
-                  diffText = formatTatEquation('T7', 'T9', p.DschgSumProvDtTm, p.LastBillDtTm);
+                  diffText = formatTatEquation('T7', 'T9', p.LastAcknIssDtTm, p.LastBillDtTm);
+                  oldDiffText = formatTatEquation('T2', 'T9', p.DschgSumProvDtTm, p.LastBillDtTm);
                   break;
-                case 9: // T10: Discharge Bill Approval
+                case 9: // T10: Bill Handed Over to Relative
+                  timeStr = p.LastBillHandOverDtTm || p.BillHandoverDtTm || '';
+                  diffText = formatTatEquation('T9', 'T10', p.LastBillDtTm, p.LastBillHandOverDtTm || p.BillHandoverDtTm);
+                  oldDiffText = formatTatEquation('T1', 'T10', p.DschgAdvGivenTm, p.LastBillHandOverDtTm || p.BillHandoverDtTm);
+                  break;
+                case 10: // T11: Bill Sent to TPA
                   timeStr = p.LastTPAAplDtTm || '';
-                  colorCode = p.TATLastTPAInternalTAT ?? 0;
-                  diffText = formatTatEquation('T1', 'T10', p.DschgAdvGivenTm, p.LastTPAAplDtTm);
+                  diffText = formatTatEquation('T10', 'T11', p.LastBillHandOverDtTm || p.BillHandoverDtTm, p.LastTPAAplDtTm);
+                  oldDiffText = formatTatEquation('T1', 'T11', p.DschgAdvGivenTm, p.LastTPAAplDtTm);
                   break;
-                case 10: // T11: Bill Handed to Patient/Sponsor
+                case 11: // T12: Sent for Claim Approval
+                  timeStr = p.ClaimApprSentDtTm || p.ClaimSentDtTm || '';
+                  diffText = formatTatEquation('T11', 'T12', p.LastTPAAplDtTm, p.ClaimApprSentDtTm || p.ClaimSentDtTm);
+                  oldDiffText = formatTatEquation('T1', 'T12', p.DschgAdvGivenTm, p.ClaimApprSentDtTm || p.ClaimSentDtTm);
+                  break;
+                case 12: // T13: TPA Approved
                   timeStr = p.LastTPAAprDtTm || '';
-                  colorCode = p.TATLastTPATAT ?? 0;
-                  diffText = formatTatEquation('T10', 'T11', p.LastTPAAplDtTm, p.LastTPAAprDtTm);
+                  diffText = formatTatEquation('T12', 'T13', p.ClaimApprSentDtTm || p.ClaimSentDtTm, p.LastTPAAprDtTm);
+                  oldDiffText = formatTatEquation('T11', 'T13', p.LastTPAAplDtTm, p.LastTPAAprDtTm);
                   break;
-                case 11: // T12: Discharge Voucher Verification
+                case 13: // T14: Final Billing Settlement
                   timeStr = p.LastStlmtDtTm || '';
-                  colorCode = p.TATLastStlmtDtTmTAT ?? 0;
-                  diffText = formatTatEquation('T11', 'T12', p.LastTPAAprDtTm, p.LastStlmtDtTm);
+                  diffText = formatTatEquation('T13', 'T14', p.LastTPAAprDtTm, p.LastStlmtDtTm);
+                  oldDiffText = formatTatEquation('T13', 'T14', p.LastTPAAprDtTm, p.LastStlmtDtTm);
                   break;
-                case 12: // T13: Patient Discharge / Bed Vacated
+                case 14: // T15: Bed Vacant Time / Pt. Physically Left
                   timeStr = p.ActDschgDtTm || '';
-                  colorCode = p.TATLastPatienTAT ?? 0;
-                  diffText = formatTatEquation('T11', 'T13', p.LastTPAAprDtTm, p.ActDschgDtTm);
+                  diffText = formatTatEquation('T14', 'T15', p.LastStlmtDtTm, p.ActDschgDtTm);
+                  oldDiffText = formatTatEquation('T13', 'T15', p.LastTPAAprDtTm, p.ActDschgDtTm);
+                  break;
+                case 15: // T16: Bed Ready
+                  timeStr = p.BedReadyDtTm || '';
+                  diffText = formatTatEquation('T15', 'T16', p.ActDschgDtTm, p.BedReadyDtTm);
+                  oldDiffText = formatTatEquation('T15', 'T16', p.ActDschgDtTm, p.BedReadyDtTm);
                   break;
               }
 
@@ -766,13 +810,21 @@ export const PatientTimelineScreen = ({
 
               let displayTime = '';
               if (timeStr) {
-                const idx = timeStr.indexOf('T');
-                if (idx !== -1) {
-                  displayTime = timeStr.substring(idx + 1, idx + 16); // Capture HH:MM:SS or HH:MM
-                  // Make it HH:MM for timeline nodes
-                  if (displayTime.length >= 5) {
-                    displayTime = displayTime.substring(0, 5);
+                const parts = timeStr.split('T');
+                if (parts.length === 2) {
+                  const datePart = parts[0];
+                  const timePart = parts[1];
+                  const dateSubparts = datePart.split('-');
+                  if (dateSubparts.length === 3) {
+                    const month = dateSubparts[1];
+                    const day = dateSubparts[2];
+                    const hourMin = timePart.substring(0, 5);
+                    displayTime = `${day}/${month} ${hourMin}`;
+                  } else {
+                    displayTime = timePart.substring(0, 5);
                   }
+                } else {
+                  displayTime = timeStr;
                 }
               }
 
@@ -781,6 +833,7 @@ export const PatientTimelineScreen = ({
                 name,
                 time: displayTime,
                 diffText: diffText,
+                oldDiffText: oldDiffText,
                 status,
                 tatLimit: '',
               };
@@ -809,6 +862,9 @@ export const PatientTimelineScreen = ({
               dateRangeText = `T1 - ${day}/${month} ${hourMin}`;
             }
 
+            const totalTatVal = calculateTat(p.DschgAdvGivenTm, p.ActDschgDtTm);
+            const bedTurnoverTatVal = calculateTat(p.DschgAdvGivenTm, p.BedReadyDtTm);
+
             const mappedDetails: PatientSessionDetails = {
               id: p?.IPNo ? String(p.IPNo) : patient.id,
               name: p?.PatientName || patient.name,
@@ -818,7 +874,7 @@ export const PatientTimelineScreen = ({
               speciality: p?.Splty_Cd || p?.Speciality || patient.speciality,
               doctor: p?.DocNm || p?.DoctorName || p?.Doctor || patient.doctor,
               stageProgress: formattedStages.filter(s => s.status !== 'white').length,
-              totalStages: 13,
+              totalStages: 16,
               dateRange: dateRangeText,
               status,
               statusDetail: patient.statusDetail,
@@ -828,6 +884,9 @@ export const PatientTimelineScreen = ({
               tpaAprDtTm: p?.LastTPAAprDtTm,
               tpaAprAmt: p?.LastTPAAprAmt,
               lastBillPreparedBy: p?.LastBillpreparedby || null,
+              totalTat: totalTatVal,
+              bedTurnoverTat: bedTurnoverTatVal,
+              remarks: p?.Remarks || p?.remarks || p?.DschgRemarks || null,
             };
 
             setActivePatient(mappedDetails);
@@ -985,6 +1044,26 @@ export const PatientTimelineScreen = ({
               <Text style={styles.specLabel}>PATIENT TYPE</Text>
               <Text style={styles.specValue}>{activePatient.patientType}</Text>
             </View>
+            {/* <View style={styles.specItem}> */}
+              {/* <Text style={styles.specLabel}>STATUS</Text>
+              <Text style={styles.specValue}>{activePatient.status || '-'}</Text>
+            </View>
+            <View style={styles.specItem}>
+              <Text style={styles.specLabel}>REMARKS</Text>
+              <Text style={styles.specValue}>{activePatient.remarks || '-'}</Text>
+            </View>
+            <View style={styles.specItem}>
+              <Text style={styles.specLabel}>TOTAL TAT</Text>
+              <Text style={styles.specValue}>{activePatient.totalTat || '-'}</Text>
+            </View>
+            <View style={styles.specItem}>
+              <Text style={styles.specLabel}>BED TURNOVER TAT</Text>
+              <Text style={styles.specValue}>{activePatient.bedTurnoverTat || '-'}</Text>
+            </View>
+            <View style={styles.specItem}>
+              <Text style={styles.specLabel}>LAST BILL PREPARED BY</Text>
+              <Text style={styles.specValue}>{activePatient.lastBillPreparedBy || '-'}</Text>
+            </View> */}
           </View>
         </View>
 
@@ -1003,7 +1082,7 @@ export const PatientTimelineScreen = ({
               const dotBorderColor = isWhite ? '#cbd5e1' : dotBg;
               const dotBorderWidth = isWhite ? 1.5 : 0;
               const dotTextColor = isWhite ? '#64748b' : '#ffffff';
-              const showTimeRow = stage.code !== 'T6';
+              const showTimeRow = true;
               
               return (
                 <View key={stage.code} style={[styles.timelineItemRow, { minHeight: showTimeRow ? 66 : 44 }]}>
@@ -1023,13 +1102,13 @@ export const PatientTimelineScreen = ({
                     </View>
                     {!isLast && <View style={styles.timelineVerticalLine} />}
                   </View>
-
+ 
                   {/* Right Column: Stage Details */}
                   <View style={styles.timelineDetailsCol}>
                     <View style={styles.stageTitleRow}>
                       <Text style={styles.stageTitleText}>
                         {stage.name}
-                        {stage.code === 'T10' && (activePatient.tpaAprDtTm || activePatient.tpaAprAmt) && (
+                        {stage.code === 'T13' && (activePatient.tpaAprDtTm || activePatient.tpaAprAmt) && (
                           <Text style={[
                             styles.tpaTitleInfoText, 
                             { 
@@ -1059,31 +1138,36 @@ export const PatientTimelineScreen = ({
 
                     {showTimeRow && (
                       <View style={styles.stageTimeRow}>
-                        {stage.code === 'T9' ? (
-                          <>
-                            <Text style={styles.stageTimeText}>{stage.time || '-'}</Text>
-                            {activePatient.lastBillPreparedBy ? (
-                              <View style={[styles.diffBadge, { backgroundColor: 'rgba(34, 197, 94, 0.1)' }]}>
-                                <Text style={[styles.diffBadgeText, { color: '#16a34a' }]}>
-                                  {`Prepared By: ${activePatient.lastBillPreparedBy}`}
-                                </Text>
-                              </View>
-                            ) : null}
-                          </>
-                        ) : (
-                          <>
-                            <Text style={styles.stageTimeText}>{stage.time || '-'}</Text>
-                            {stage.diffText && stage.diffText !== '-' && !stage.diffText.endsWith('= -') ? (
-                              <View style={[styles.diffBadge, { backgroundColor: (stage.status === 'green' || stage.status === 'white') ? 'rgba(34, 197, 94, 0.1)' : 'rgba(234, 88, 12, 0.1)' }]}>
-                                <Text style={[styles.diffBadgeText, { color: (stage.status === 'green' || stage.status === 'white') ? '#16a34a' : '#ea580c' }]}>
-                                  {stage.diffText}
-                                </Text>
-                              </View>
-                            ) : (
-                              <Text style={styles.noTatText}>{stage.diffText || '-'}</Text>
-                            )}
-                          </>
-                        )}
+                        <Text style={styles.stageTimeText}>{stage.time || '-'}</Text>
+                        <View style={{ flex: 1, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center' }}>
+                          {stage.diffText && stage.diffText !== '-' && !stage.diffText.endsWith('= -') ? (
+                            <View style={[styles.diffBadge, { backgroundColor: (stage.status === 'green' || stage.status === 'white') ? 'rgba(34, 197, 94, 0.1)' : 'rgba(234, 88, 12, 0.1)', marginRight: 6, marginBottom: 3 }]}>
+                              <Text style={[styles.diffBadgeText, { color: (stage.status === 'green' || stage.status === 'white') ? '#16a34a' : '#ea580c' }]}>
+                                {stage.diffText}
+                              </Text>
+                            </View>
+                          ) : (
+                            <Text style={[styles.noTatText, { marginRight: 6, marginBottom: 3 }]}>{stage.diffText || '-'}</Text>
+                          )}
+
+                          {/* 
+                          {stage.oldDiffText && stage.oldDiffText !== '-' && !stage.oldDiffText.endsWith('= -') && stage.oldDiffText !== stage.diffText ? (
+                            <View style={[styles.diffBadge, { backgroundColor: '#f1f5f9', marginBottom: 3 }]}>
+                              <Text style={[styles.diffBadgeText, { color: '#64748b' }]}>
+                                {`Old: ${stage.oldDiffText}`}
+                              </Text>
+                            </View>
+                          ) : null}
+                          */}
+
+                          {stage.code === 'T9' && activePatient.lastBillPreparedBy ? (
+                            <View style={[styles.diffBadge, { backgroundColor: 'rgba(34, 197, 94, 0.08)', marginBottom: 3 }]}>
+                              <Text style={[styles.diffBadgeText, { color: '#16a34a' }]}>
+                                {`Prepared By: ${activePatient.lastBillPreparedBy}`}
+                              </Text>
+                            </View>
+                          ) : null}
+                        </View>
                       </View>
                     )}
                   </View>

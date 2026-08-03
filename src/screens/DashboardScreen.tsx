@@ -161,23 +161,29 @@ export const DashboardScreen = ({
 
         const patientsList = Array.isArray(response.data.patients) ? response.data.patients : [];
         const mappedList = patientsList.map((p: any, idx: number) => {
-          const colorString = p.StageColors || "0,0,0,0,0,0,0,0,0,0,0,0,0";
+          const colorString = p.NewStageColors || p.StageColors || "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0";
           const colorCodes = colorString.split(',');
+          while (colorCodes.length < 16) {
+            colorCodes.push('0');
+          }
 
           const stageNames = [
             'Discharge Advice',
-            'Last Issue Request (Nurse Station)',
+            'Discharge Summary (Provisional)',
+            'Last Indent by Nursing',
             'Last Issue by Pharmacy',
             'Last Issue Return Request (Nurse)',
-            'Last Issue Return by Pharmacy',
-            'Visitsheet / Voucher to Billing',
-            'Discharge Summary (Provisional)',
+            'Last Return Acknowledged by Pharmacy',
+            'Last Nursing Acknowledgement',
             'Discharge Summary (Final)',
-            'Discharge Bill Preparation',
-            'Discharge Bill Approval',
-            'Bill Handed to Patient/Sponsor',
-            'Discharge Voucher Verification',
-            'Patient Discharge / Bed Vacated'
+            'Last Bill Prepared',
+            'Bill Handed Over to Relative',
+            'Bill Sent to TPA',
+            'Sent for Claim Approval',
+            'TPA Approved',
+            'Final Billing Settlement',
+            'Bed Vacant Time / Pt. Physically Left',
+            'Bed Ready'
           ];
 
           const formattedStages = stageNames.map((name, sIdx) => {
@@ -189,7 +195,8 @@ export const DashboardScreen = ({
 
             let stageTime = '';
             if (sIdx === 0) stageTime = p.DschgAdvGivenTm ? p.DschgAdvGivenTm.substring(11, 16) : '';
-            else if (sIdx === 12) stageTime = p.ActDschgDtTm ? p.ActDschgDtTm.substring(11, 16) : '';
+            else if (sIdx === 14) stageTime = p.ActDschgDtTm ? p.ActDschgDtTm.substring(11, 16) : '';
+            else if (sIdx === 15) stageTime = p.BedReadyDtTm ? p.BedReadyDtTm.substring(11, 16) : '';
 
             return {
               code: `T${sIdx + 1}`,
@@ -232,8 +239,8 @@ export const DashboardScreen = ({
             ward: p.Ward || 'WARD',
             speciality: p.Speciality || 'MEDICINE',
             doctor: p.DoctorName || p.Doctor || 'DR. CLINICIAN',
-            stageProgress: p.StagesDone ?? 0,
-            totalStages: p.StagesTotal ?? 13,
+            stageProgress: formattedStages.filter(s => s.status !== 'white').length,
+            totalStages: 16,
             dateRange: dateRangeText,
             status,
             statusDetail,
@@ -330,7 +337,10 @@ export const DashboardScreen = ({
 
   // Filter patients based on tab choice, search input, and calendar date range
   const filteredPatients = patientsDataset.filter((patient) => {
-    const matchesTab = selectedTab === 'All' || patient.status === selectedTab;
+    const matchesTab = 
+      selectedTab === 'All' || 
+      patient.status === selectedTab ||
+      (selectedTab === 'Out of TAT' && (patient.status === 'Out of TAT' || patient.statusDetail === 'Delay'));
     const matchesSearch =
       patient.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       patient.ipNo.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -349,7 +359,8 @@ export const DashboardScreen = ({
   });
 
   // Calculate status counts (fallback to '--' when live API data has not loaded)
-  const totalCount = liveCounts ? ((liveCounts.totAdmitted || 0) + (liveCounts.totDischarged || 0) + (liveCounts.totOutOfTat || 0)) : '--';
+  const totalCount = liveCounts ? ((liveCounts.totAdmitted || 0) + (liveCounts.totDischarged || 0)) : '--';
+  const allFilterCount = liveCounts ? ((liveCounts.totAdmitted || 0) + (liveCounts.totDischarged || 0) + (liveCounts.totOutOfTat || 0)) : '--';
   const admittedCount = liveCounts?.totAdmitted !== undefined ? liveCounts.totAdmitted : '--';
   const dischargedCount = liveCounts?.totDischarged !== undefined ? liveCounts.totDischarged : '--';
   const outOfTatCount = liveCounts?.totOutOfTat !== undefined ? liveCounts.totOutOfTat : '--';
@@ -429,75 +440,60 @@ export const DashboardScreen = ({
       >
         <View style={styles.metricsRow}>
           {/* Metric Card 1: Total */}
-          <TouchableOpacity 
-            style={[styles.metricCard, selectedTab === 'All' && styles.metricCardActive]}
-            onPress={() => setSelectedTab('All')}
-            activeOpacity={0.8}
-          >
+          <View style={[styles.metricCard, { borderColor: THEME.colors.primary, borderWidth: 1.5, backgroundColor: '#ffffff' }]}>
             <View style={styles.metricCardHeader}>
               <UserIcon color={THEME.colors.textLight} />
               <View style={[styles.metricBadge, { backgroundColor: '#f1f5f9' }]}>
+                <Text style={{ fontSize: 6.5, fontWeight: '700', color: THEME.colors.textLight }}>ALL</Text>
               </View>
             </View>
-            <View style={styles.metricBottomRow}>
-              <Text style={styles.metricValue}>{totalCount}</Text>
-              <Text style={styles.metricLabel} numberOfLines={1}>Total</Text>
+            <View style={{ flexDirection: 'column', alignItems: 'center', width: '100%', marginTop: 4 }}>
+              <Text style={{ fontSize: 9.5, color: THEME.colors.textLight, fontWeight: '700', textAlign: 'center' }} numberOfLines={1}>Total</Text>
+              <Text style={{ fontSize: 20, fontWeight: '800', color: THEME.colors.textDark, textAlign: 'center', marginTop: 1 }}>{totalCount}</Text>
             </View>
-          </TouchableOpacity>
+          </View>
 
           {/* Metric Card 2: Admitted */}
-          <TouchableOpacity 
-            style={[styles.metricCard, selectedTab === 'Admitted' && styles.metricCardActive]}
-            onPress={() => setSelectedTab('Admitted')}
-            activeOpacity={0.8}
-          >
+          <View style={[styles.metricCard, { borderColor: THEME.colors.primary, borderWidth: 1.5, backgroundColor: '#ffffff' }]}>
             <View style={styles.metricCardHeader}>
               <Text style={{ fontSize: 13, color: '#0284c7', fontWeight: 'bold', lineHeight: 15 }}>♡</Text>
               <View style={[styles.metricBadge, { backgroundColor: '#e0f2fe' }]}>
                 <Text style={[styles.metricBadgeText, { color: '#0284c7' }]} numberOfLines={1}>IN PROGRESS</Text>
               </View>
             </View>
-            <View style={styles.metricBottomRow}>
-              <Text style={styles.metricValue}>{admittedCount}</Text>
-              <Text style={styles.metricLabel} numberOfLines={1}>Admitted</Text>
+            <View style={{ flexDirection: 'column', alignItems: 'center', width: '100%', marginTop: 4 }}>
+              <Text style={{ fontSize: 9.5, color: THEME.colors.textLight, fontWeight: '700', textAlign: 'center' }} numberOfLines={1}>Admitted</Text>
+              <Text style={{ fontSize: 20, fontWeight: '800', color: THEME.colors.textDark, textAlign: 'center', marginTop: 1 }}>{admittedCount}</Text>
             </View>
-          </TouchableOpacity>
+          </View>
 
           {/* Metric Card 3: Discharged */}
-          <TouchableOpacity 
-            style={[styles.metricCard, selectedTab === 'Discharged' && styles.metricCardActive]}
-            onPress={() => setSelectedTab('Discharged')}
-            activeOpacity={0.8}
-          >
+          <View style={[styles.metricCard, { borderColor: THEME.colors.primary, borderWidth: 1.5, backgroundColor: '#ffffff' }]}>
             <View style={styles.metricCardHeader}>
               <MiniCheckIcon color={THEME.colors.success} />
               <View style={[styles.metricBadge, { backgroundColor: THEME.colors.successBg }]}>
                 <Text style={[styles.metricBadgeText, { color: THEME.colors.success }]} numberOfLines={1}>TODAY</Text>
               </View>
             </View>
-            <View style={styles.metricBottomRow}>
-              <Text style={styles.metricValue}>{dischargedCount}</Text>
-              <Text style={styles.metricLabel} numberOfLines={1}>Discharged</Text>
+            <View style={{ flexDirection: 'column', alignItems: 'center', width: '100%', marginTop: 4 }}>
+              <Text style={{ fontSize: 9.5, color: THEME.colors.textLight, fontWeight: '700', textAlign: 'center' }} numberOfLines={1}>Discharged</Text>
+              <Text style={{ fontSize: 20, fontWeight: '800', color: THEME.colors.textDark, textAlign: 'center', marginTop: 1 }}>{dischargedCount}</Text>
             </View>
-          </TouchableOpacity>
+          </View>
 
           {/* Metric Card 4: Out of TAT */}
-          <TouchableOpacity 
-            style={[styles.metricCard, selectedTab === 'Out of TAT' && styles.metricCardActive]}
-            onPress={() => setSelectedTab('Out of TAT')}
-            activeOpacity={0.8}
-          >
+          <View style={[styles.metricCard, { borderColor: THEME.colors.primary, borderWidth: 1.5, backgroundColor: '#ffffff' }]}>
             <View style={styles.metricCardHeader}>
               <MiniWarningIcon color={THEME.colors.danger} />
               <View style={[styles.metricBadge, { backgroundColor: THEME.colors.dangerBg }]}>
                 <Text style={[styles.metricBadgeText, { color: THEME.colors.danger }]} numberOfLines={1}>NEEDS ACTION</Text>
               </View>
             </View>
-            <View style={styles.metricBottomRow}>
-              <Text style={styles.metricValue}>{outOfTatCount}</Text>
-              <Text style={styles.metricLabel} numberOfLines={1}>Out of TAT</Text>
+            <View style={{ flexDirection: 'column', alignItems: 'center', width: '100%', marginTop: 4 }}>
+              <Text style={{ fontSize: 9.5, color: THEME.colors.textLight, fontWeight: '700', textAlign: 'center' }} numberOfLines={1}>Out of TAT</Text>
+              <Text style={{ fontSize: 20, fontWeight: '800', color: THEME.colors.textDark, textAlign: 'center', marginTop: 1 }}>{outOfTatCount}</Text>
             </View>
-          </TouchableOpacity>
+          </View>
         </View>
 
         {/* Title Header Section */}
@@ -545,7 +541,7 @@ export const DashboardScreen = ({
             onPress={() => setSelectedTab('All')}
             activeOpacity={0.8}
           >
-            <Text style={[styles.tabBtnText, selectedTab === 'All' && styles.tabBtnTextActive]}>All {totalCount}</Text>
+            <Text style={[styles.tabBtnText, selectedTab === 'All' && styles.tabBtnTextActive]}>All {allFilterCount}</Text>
           </TouchableOpacity>
           
           <TouchableOpacity 
