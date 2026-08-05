@@ -22,5 +22,8 @@ export const API_CONFIG = {
     CHAT_GET_MESSAGES: '/chatGetMessages',
     CHAT_SEND_MESSAGE: '/chatSendMessage',
     CHAT_MARK_READ: '/chatMarkRead',
+    CHAT_EDIT_MESSAGE: '/chatEditMessage',
+    CHAT_DELETE_MESSAGE: '/chatDeleteMessage',
+    CHAT_MESSAGE_SEEN_BY: '/chatGetMessageSeenBy',
   },
 };

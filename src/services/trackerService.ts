@@ -785,4 +785,173 @@ export const trackerService = {
       throw error;
     }
   },
+
+  /**
+   * Edits a chat message.
+   */
+  async chatEditMessage(
+    token: string,
+    payload: {
+      threadId: number;
+      msgId: number;
+      userId: string;
+      msgText: string;
+    }
+  ): Promise<any> {
+    const url = `${API_CONFIG.CAREWORKS_BASE_URL}${API_CONFIG.ENDPOINTS.CHAT_EDIT_MESSAGE}`;
+
+    console.log('====================================');
+    console.log('API CHAT EDIT MESSAGE HIT:');
+    console.log('URL:', url);
+    console.log('PARAMS:', JSON.stringify(payload, null, 2));
+    console.log('TOKEN:', token ? `${token.substring(0, 15)}...` : 'NONE');
+    console.log('====================================');
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const text = await response.text();
+      let parsedData: any;
+      try {
+        parsedData = JSON.parse(text);
+      } catch (err) {
+        console.log('====================================');
+        console.log('API CHAT EDIT MESSAGE PARSE ERROR (raw):', text);
+        console.log('====================================');
+        throw new Error(`Invalid response format: ${response.status}`);
+      }
+
+      console.log('====================================');
+      console.log('API CHAT EDIT MESSAGE RESPONSE:');
+      console.log('STATUS:', response.status);
+      console.log('DATA:', JSON.stringify(parsedData, null, 2));
+      console.log('====================================');
+
+      return parsedData;
+    } catch (error: any) {
+      console.log('====================================');
+      console.log('API CHAT EDIT MESSAGE EXCEPTION:', error);
+      console.log('====================================');
+      throw error;
+    }
+  },
+
+  /**
+   * Deletes a chat message.
+   */
+  async chatDeleteMessage(
+    token: string,
+    payload: {
+      threadId: number;
+      msgId: number;
+      userId: string;
+    }
+  ): Promise<any> {
+    const url = `${API_CONFIG.CAREWORKS_BASE_URL}${API_CONFIG.ENDPOINTS.CHAT_DELETE_MESSAGE}`;
+
+    console.log('====================================');
+    console.log('API CHAT DELETE MESSAGE HIT:');
+    console.log('URL:', url);
+    console.log('PARAMS:', JSON.stringify(payload, null, 2));
+    console.log('TOKEN:', token ? `${token.substring(0, 15)}...` : 'NONE');
+    console.log('====================================');
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const text = await response.text();
+      let parsedData: any;
+      try {
+        parsedData = JSON.parse(text);
+      } catch (err) {
+        console.log('====================================');
+        console.log('API CHAT DELETE MESSAGE PARSE ERROR (raw):', text);
+        console.log('====================================');
+        throw new Error(`Invalid response format: ${response.status}`);
+      }
+
+      console.log('====================================');
+      console.log('API CHAT DELETE MESSAGE RESPONSE:');
+      console.log('STATUS:', response.status);
+      console.log('DATA:', JSON.stringify(parsedData, null, 2));
+      console.log('====================================');
+
+      return parsedData;
+    } catch (error: any) {
+      console.log('====================================');
+      console.log('API CHAT DELETE MESSAGE EXCEPTION:', error);
+      console.log('====================================');
+      throw error;
+    }
+  },
+
+  /**
+   * Fetches the seen/not-seen breakdown for a chat message.
+   */
+  async chatGetMessageSeenBy(
+    token: string,
+    payload: {
+      threadId: number;
+      msgId: number;
+      userId: string;
+    }
+  ): Promise<any> {
+    const url = `${API_CONFIG.CAREWORKS_BASE_URL}${API_CONFIG.ENDPOINTS.CHAT_MESSAGE_SEEN_BY}`;
+
+    console.log('====================================');
+    console.log('API CHAT MESSAGE SEEN BY HIT:');
+    console.log('URL:', url);
+    console.log('PARAMS:', JSON.stringify(payload, null, 2));
+    console.log('TOKEN:', token ? `${token.substring(0, 15)}...` : 'NONE');
+    console.log('====================================');
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const text = await response.text();
+      let parsedData: any;
+      try {
+        parsedData = JSON.parse(text);
+      } catch (err) {
+        console.log('====================================');
+        console.log('API CHAT MESSAGE SEEN BY PARSE ERROR (raw):', text);
+        console.log('====================================');
+        throw new Error(`Invalid response format: ${response.status}`);
+      }
+
+      console.log('====================================');
+      console.log('API CHAT MESSAGE SEEN BY RESPONSE:');
+      console.log('STATUS:', response.status);
+      console.log('DATA:', JSON.stringify(parsedData, null, 2));
+      console.log('====================================');
+
+      return parsedData;
+    } catch (error: any) {
+      console.log('====================================');
+      console.log('API CHAT MESSAGE SEEN BY EXCEPTION:', error);
+      console.log('====================================');
+      throw error;
+    }
+  },
 };

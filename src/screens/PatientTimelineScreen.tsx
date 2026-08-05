@@ -19,7 +19,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { THEME } from '../constants/theme';
-import { ExitIcon, EditIcon, DeleteIcon, DeleteEveryoneIcon, CopyIcon, ForwardIcon } from '../components/Icons';
+import { ExitIcon, EditIcon, DeleteIcon, DeleteEveryoneIcon, CopyIcon, ForwardIcon, NoEntryIcon, MessageTickIcon, InfoIcon, CloseIcon } from '../components/Icons';
 import { trackerService } from '../services/trackerService';
 import { signalRService } from '../services/signalrService';
 import { UserSessionData } from '../services/authService';
@@ -68,7 +68,9 @@ export interface ChatMessage {
   text: string;
   timestamp: string;
   isDeleted?: boolean;
+  deleteType?: number | null;
   isEdited?: boolean;
+  isSeen?: boolean;
 }
 
 
@@ -216,6 +218,13 @@ export const PatientTimelineScreen = ({
   const [unreadCount, setUnreadCount] = useState<number>(0);
   const [isFetchingChat, setIsFetchingChat] = useState(false);
 
+  const [seenInfoVisible, setSeenInfoVisible] = useState(false);
+  const [seenInfoLoading, setSeenInfoLoading] = useState(false);
+  const [seenInfoData, setSeenInfoData] = useState<{
+    seenBy: { userId: string; userName: string; lastReadMsgId: number }[];
+    notSeenBy: { userId: string; userName: string; lastReadMsgId: number }[];
+  } | null>(null);
+
   // Draggable Floating Chat Button Setup
   const pan = useRef(new Animated.ValueXY()).current;
   const valRef = useRef({ x: 0, y: 0 });
@@ -314,52 +323,22 @@ export const PatientTimelineScreen = ({
         return;
       }
     }
-    const methods = [
-      'JoinGroup', 'JoinThread', 'JoinRoom', 'ConnectToThread', 
-      'SubscribeToThread', 'Subscribe', 'JoinChat', 'joinChat', 
-      'ConnectChat', 'join', 'Join'
-    ];
-    
-    // Construct all possible group name formats
-    const groupNames = [
-      targetThreadId,
-      String(targetThreadId),
-      `thread_${targetThreadId}`,
-      `Thread_${targetThreadId}`,
-      `chat_${targetThreadId}`,
-      `Chat_${targetThreadId}`,
-      `group_${targetThreadId}`,
-      `Group_${targetThreadId}`
-    ];
-    
-    for (const method of methods) {
-      for (const groupName of groupNames) {
-        // 1. Try single argument
-        try {
-          await signalRService.invokeHubMethod(method, groupName);
-          console.log(`[SignalR] Success: ${method}(${typeof groupName === 'string' ? `"${groupName}"` : groupName})`);
-        } catch (e) {}
-
-        // 2. Try two arguments (userId, groupName)
-        try {
-          await signalRService.invokeHubMethod(method, sessionData.userId, groupName);
-          console.log(`[SignalR] Success: ${method}("${sessionData.userId}", ${typeof groupName === 'string' ? `"${groupName}"` : groupName})`);
-        } catch (e) {}
-
-        // 3. Try two arguments (groupName, userId)
-        try {
-          await signalRService.invokeHubMethod(method, groupName, sessionData.userId);
-          console.log(`[SignalR] Success: ${method}(${typeof groupName === 'string' ? `"${groupName}"` : groupName}, "${sessionData.userId}")`);
-        } catch (e) {}
-      }
+    try {
+      await signalRService.invokeHubMethod('JoinThread', targetThreadId);
+    } catch (err) {
+      console.warn('[SignalR] Failed to join thread group:', targetThreadId, err);
     }
-    console.log(`[SignalR] All group join invocation attempts completed for thread: ${targetThreadId}`);
   }, [sessionData.userId]);
 
-  const fetchMessages = useCallback(async (targetThreadId: number) => {
-    setIsFetchingChat(true);
-    // Notify the backend hub that we are joining this chat group
-    joinSignalRGroup(targetThreadId);
+  const lastMarkReadRef = useRef<{ threadId: number | null; msgId: number }>({ threadId: null, msgId: 0 });
+
+  const fetchMessages = useCallback(async (targetThreadId: number, options?: { silent?: boolean }) => {
+    const silent = options?.silent ?? false;
+    if (!silent) {
+      setIsFetchingChat(true);
+      // Notify the backend hub that we are joining this chat group
+      joinSignalRGroup(targetThreadId);
+    }
     try {
       const res = await trackerService.chatGetMessages(sessionData.token, {
         threadId: targetThreadId,
@@ -377,27 +356,48 @@ export const PatientTimelineScreen = ({
           userRole: (m.senderUsrId || m.senderUserId) === sessionData.userId ? 'Me' : 'Team Member',
           text: m.msgText,
           timestamp: formatMsgTime(m.crtDtTm),
+          isDeleted: m.isDeleted,
+          deleteType: m.deleteType,
+          isEdited: m.isEdited,
+          isSeen: m.isSeen,
         }));
         setMessages(mapped);
 
-        // Mark as read if there are messages
+        // Mark as read only if there's actually something new for this thread,
+        // otherwise every poll/refresh would re-trigger a mark-read call.
         if (mapped.length > 0) {
           const maxMsgId = Math.max(...res.data.map((m: any) => m.msgId));
-          trackerService.chatMarkRead(sessionData.token, {
-            threadId: targetThreadId,
-            userId: sessionData.userId,
-            lastReadMsgId: maxMsgId
-          }).then(() => {
-            setUnreadCount(0);
-          }).catch(e => console.warn('Failed to mark read:', e));
+          const alreadyMarked = lastMarkReadRef.current.threadId === targetThreadId
+            && lastMarkReadRef.current.msgId >= maxMsgId;
+
+          if (!alreadyMarked) {
+            lastMarkReadRef.current = { threadId: targetThreadId, msgId: maxMsgId };
+            trackerService.chatMarkRead(sessionData.token, {
+              threadId: targetThreadId,
+              userId: sessionData.userId,
+              lastReadMsgId: maxMsgId
+            }).then(() => {
+              setUnreadCount(0);
+            }).catch(e => console.warn('Failed to mark read:', e));
+          }
         }
       }
     } catch (err) {
       console.warn('Failed to fetch chat messages:', err);
     } finally {
-      setIsFetchingChat(false);
+      if (!silent) setIsFetchingChat(false);
     }
   }, [sessionData]);
+
+  // Fallback polling: some backends don't yet push a SignalR event for edits/deletes,
+  // so re-fetch periodically while the chat is open to keep both sides in sync.
+  useEffect(() => {
+    if (!isChatModalVisible || !threadId) return;
+    const poll = setInterval(() => {
+      fetchMessages(threadId, { silent: true });
+    }, 5000);
+    return () => clearInterval(poll);
+  }, [isChatModalVisible, threadId, fetchMessages]);
 
   const handleOpenChat = async () => {
     setIsChatModalVisible(true);
@@ -477,6 +477,11 @@ export const PatientTimelineScreen = ({
 
       const currentThreadId = threadIdRef.current;
       if (currentThreadId && msgThreadId && String(msgThreadId) === String(currentThreadId)) {
+        const isDeleted = msg.isDeleted ?? msg.IsDeleted ?? false;
+        const deleteType = msg.deleteType ?? msg.DeleteType ?? null;
+        const isEdited = msg.isEdited ?? msg.IsEdited ?? false;
+        const isSeen = msg.isSeen ?? msg.IsSeen ?? false;
+
         const newMsg = {
           id: String(msgId || Date.now()),
           userId: senderUsrId || '',
@@ -484,10 +489,16 @@ export const PatientTimelineScreen = ({
           userRole: senderUsrId === sessionData.userId ? 'Me' : 'Team Member',
           text: msgText || '',
           timestamp: formatMsgTime(crtDtTm || new Date().toISOString()),
+          isDeleted,
+          deleteType,
+          isEdited,
+          isSeen,
         };
         
         setMessages(prev => {
-          if (prev.some(m => m.id === newMsg.id)) return prev;
+          if (prev.some(m => m.id === newMsg.id)) {
+            return prev.map(m => m.id === newMsg.id ? { ...m, ...newMsg } : m);
+          }
           return [...prev, newMsg];
         });
 
@@ -547,15 +558,36 @@ export const PatientTimelineScreen = ({
     if (!newMessageText.trim()) return;
     
     if (editingMessageId) {
-      setMessages(prev =>
-        prev.map(m =>
-          m.id === editingMessageId
-            ? { ...m, text: newMessageText.trim(), isEdited: true }
-            : m
-        )
-      );
-      setEditingMessageId(null);
-      setNewMessageText('');
+      try {
+        const res = await trackerService.chatEditMessage(sessionData.token, {
+          threadId: threadId || 0,
+          msgId: Number(editingMessageId),
+          userId: sessionData.userId,
+          msgText: newMessageText.trim()
+        });
+
+        if (res && res.success && res.data) {
+          setMessages(prev =>
+            prev.map(m =>
+              m.id === editingMessageId
+                ? {
+                    ...m,
+                    text: res.data.msgText,
+                    isEdited: res.data.isEdited,
+                    isDeleted: res.data.isDeleted,
+                    deleteType: res.data.deleteType
+                  }
+                : m
+            )
+          );
+        }
+      } catch (err) {
+        console.warn('Failed to edit chat message:', err);
+        showCustomAlert('Error', 'Failed to edit message. Please retry.', 'warning');
+      } finally {
+        setEditingMessageId(null);
+        setNewMessageText('');
+      }
       return;
     }
 
@@ -608,41 +640,32 @@ export const PatientTimelineScreen = ({
     }
   };
 
-  const handleDeletePress = (message: ChatMessage) => {
-    const isSelf = message.userId === sessionData.userId;
-    
-    const options = [];
-    if (isSelf) {
-      options.push({
-        text: 'Delete for Everyone',
-        style: 'destructive' as const,
-        onPress: () => {
-          setMessages(prev =>
-            prev.map(m => m.id === message.id ? { ...m, isDeleted: true, text: '' } : m)
-          );
-        }
+  const handleDeletePress = async (message: ChatMessage) => {
+    try {
+      const res = await trackerService.chatDeleteMessage(sessionData.token, {
+        threadId: threadId || 0,
+        msgId: Number(message.id),
+        userId: sessionData.userId
       });
-    }
 
-    options.push({
-      text: 'Delete for Me',
-      style: 'destructive' as const,
-      onPress: () => {
-        setMessages(prev => prev.filter(m => m.id !== message.id));
+      if (res && res.success && res.data) {
+        setMessages(prev =>
+          prev.map(m =>
+            m.id === message.id
+              ? {
+                  ...m,
+                  isDeleted: res.data.isDeleted,
+                  deleteType: res.data.deleteType,
+                  text: res.data.msgText
+                }
+              : m
+          )
+        );
       }
-    });
-
-    options.push({
-      text: 'Cancel',
-      style: 'cancel' as const
-    });
-
-    Alert.alert(
-      'Delete message?',
-      undefined,
-      options,
-      { cancelable: true }
-    );
+    } catch (err) {
+      console.warn('Failed to delete chat message:', err);
+      showCustomAlert('Error', 'Failed to delete message. Please retry.', 'warning');
+    }
   };
 
   const handleCopyPress = (message: ChatMessage) => {
@@ -659,6 +682,30 @@ export const PatientTimelineScreen = ({
     toastTimeoutRef.current = setTimeout(() => {
       setToastMessage(null);
     }, 3000);
+  };
+
+  const handleShowSeenInfo = async (message: ChatMessage) => {
+    setSeenInfoVisible(true);
+    setSeenInfoLoading(true);
+    setSeenInfoData(null);
+    try {
+      const res = await trackerService.chatGetMessageSeenBy(sessionData.token, {
+        threadId: threadId || 0,
+        msgId: Number(message.id),
+        userId: sessionData.userId
+      });
+
+      if (res && res.success && res.data) {
+        setSeenInfoData({
+          seenBy: res.data.seenBy || [],
+          notSeenBy: res.data.notSeenBy || []
+        });
+      }
+    } catch (err) {
+      console.warn('Failed to fetch message seen info:', err);
+    } finally {
+      setSeenInfoLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -1285,6 +1332,10 @@ export const PatientTimelineScreen = ({
                   keyExtractor={(item) => item.id}
                   contentContainerStyle={styles.chatListContent}
                   renderItem={({ item }) => {
+                    // Deleted before anyone saw it: drop it from the thread entirely.
+                    if (item.isDeleted && item.deleteType === 1) {
+                      return null;
+                    }
                     const isSelf = item.userId === sessionData.userId;
                     return (
                       <View style={[
@@ -1299,55 +1350,6 @@ export const PatientTimelineScreen = ({
                             isSelf ? styles.messageBubbleSelf : styles.messageBubbleOther
                           ]}
                         >
-                          {/* Floating Action Menu (Edit / Copy / Delete) */}
-                          {activeActionMessageId === item.id && (
-                            <View style={[
-                              styles.floatingActionMenu,
-                              isSelf ? styles.floatingMenuSelf : styles.floatingMenuOther
-                            ]}>
-                              {isSelf && (
-                                <TouchableOpacity 
-                                  activeOpacity={0.7}
-                                  style={styles.floatingActionBtn}
-                                  onPress={() => {
-                                    setEditingMessageId(item.id);
-                                    setNewMessageText(item.text);
-                                    setActiveActionMessageId(null);
-                                    setTimeout(() => {
-                                      chatInputRef.current?.focus();
-                                    }, 80);
-                                  }}
-                                >
-                                  <EditIcon color={THEME.colors.primary} />
-                                  <Text style={styles.floatingActionText}>Edit</Text>
-                                </TouchableOpacity>
-                              )}
-
-                              <TouchableOpacity 
-                                activeOpacity={0.7}
-                                style={styles.floatingActionBtn}
-                                onPress={() => {
-                                  setActiveActionMessageId(null);
-                                  handleCopyPress(item);
-                                }}
-                              >
-                                <CopyIcon color={THEME.colors.primary} />
-                                <Text style={styles.floatingActionText}>Copy</Text>
-                              </TouchableOpacity>
-                              
-                              <TouchableOpacity 
-                                activeOpacity={0.7}
-                                style={styles.floatingActionBtn}
-                                onPress={() => {
-                                  setActiveActionMessageId(null);
-                                  handleDeletePress(item);
-                                }}
-                              >
-                                <DeleteIcon color={THEME.colors.primary} />
-                                <Text style={styles.floatingActionText}>Delete</Text>
-                              </TouchableOpacity>
-                            </View>
-                          )}
 
                           {!isSelf && (
                             <Text style={styles.messageSender}>
@@ -1361,9 +1363,12 @@ export const PatientTimelineScreen = ({
                           )}
                           
                           {item.isDeleted ? (
-                            <Text style={styles.deletedMessageText}>
-                              {isSelf ? '🚫 You deleted this message' : '🚫 This message was deleted'}
-                            </Text>
+                            <View style={styles.deletedMessageRow}>
+                              <NoEntryIcon color="red" />
+                              <Text style={styles.deletedMessageText}>
+                                {item.text || (isSelf ? 'You deleted this message' : 'This message was deleted')}
+                              </Text>
+                            </View>
                           ) : (
                             <Text style={styles.messageText}>
                               {item.text}
@@ -1371,7 +1376,14 @@ export const PatientTimelineScreen = ({
                             </Text>
                           )}
                           
-                          <Text style={styles.messageTime}>{item.timestamp}</Text>
+                          <View style={styles.messageFooterRow}>
+                            <Text style={styles.messageTimeInline}>{item.timestamp}</Text>
+                            {isSelf && !item.isDeleted && (
+                              <View style={styles.messageTickWrapper}>
+                                <MessageTickIcon seen={!!item.isSeen} />
+                              </View>
+                            )}
+                          </View>
                         </TouchableOpacity>
                       </View>
                     );
@@ -1457,6 +1469,170 @@ export const PatientTimelineScreen = ({
             </TouchableOpacity>
           </View>
         </View>
+      </Modal>
+
+      {/* Message Options Bottom Sheet Modal */}
+      <Modal
+        visible={activeActionMessageId !== null}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setActiveActionMessageId(null)}
+      >
+        <TouchableOpacity
+          style={styles.optionsModalOverlay}
+          activeOpacity={1}
+          onPress={() => setActiveActionMessageId(null)}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            style={styles.optionsModalContent}
+          >
+            <View style={styles.optionsModalHandle} />
+            <Text style={styles.optionsModalTitle}>Message Actions</Text>
+            
+            <View style={styles.optionsModalButtons}>
+              {(() => {
+                const msg = messages.find(m => m.id === activeActionMessageId);
+                const isSelf = msg?.userId === sessionData.userId;
+                
+                return (
+                  <>
+                    {isSelf && msg && (
+                      <TouchableOpacity
+                        style={styles.optionsModalBtn}
+                        onPress={() => {
+                          setEditingMessageId(msg.id);
+                          setNewMessageText(msg.text);
+                          setActiveActionMessageId(null);
+                          setTimeout(() => {
+                            chatInputRef.current?.focus();
+                          }, 80);
+                        }}
+                      >
+                        <Text style={styles.optionsModalBtnText}>Edit Message</Text>
+                      </TouchableOpacity>
+                    )}
+
+                    {msg && (
+                      <TouchableOpacity
+                        style={styles.optionsModalBtn}
+                        onPress={() => {
+                          handleCopyPress(msg);
+                          setActiveActionMessageId(null);
+                        }}
+                      >
+                        <Text style={styles.optionsModalBtnText}>Copy Text</Text>
+                      </TouchableOpacity>
+                    )}
+
+                    {isSelf && msg && !msg.isDeleted && (
+                      <TouchableOpacity
+                        style={styles.optionsModalBtn}
+                        onPress={() => {
+                          setActiveActionMessageId(null);
+                          handleShowSeenInfo(msg);
+                        }}
+                      >
+                        <Text style={styles.optionsModalBtnText}>Info</Text>
+                      </TouchableOpacity>
+                    )}
+
+                    {isSelf && msg && (
+                      <TouchableOpacity
+                        style={[styles.optionsModalBtn, styles.optionsModalDeleteBtn]}
+                        onPress={() => {
+                          handleDeletePress(msg);
+                          setActiveActionMessageId(null);
+                        }}
+                      >
+                        <Text style={styles.optionsModalDeleteBtnText}>Delete Message</Text>
+                      </TouchableOpacity>
+                    )}
+                  </>
+                );
+              })()}
+              
+              <TouchableOpacity
+                style={[styles.optionsModalBtn, styles.optionsModalCancelBtn]}
+                onPress={() => setActiveActionMessageId(null)}
+              >
+                <Text style={styles.optionsModalCancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Message Seen Info Modal */}
+      <Modal
+        visible={seenInfoVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setSeenInfoVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.optionsModalOverlay}
+          activeOpacity={1}
+          onPress={() => setSeenInfoVisible(false)}
+        >
+          <TouchableOpacity activeOpacity={1} style={styles.optionsModalContent}>
+            <View style={styles.optionsModalHandle} />
+            <TouchableOpacity
+              style={styles.seenInfoCloseBtn}
+              onPress={() => setSeenInfoVisible(false)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <CloseIcon color="#64748b" />
+            </TouchableOpacity>
+            <View style={styles.seenInfoTitleRow}>
+              <InfoIcon color={THEME.colors.primary} />
+              <Text style={styles.seenInfoTitleText}>Message Info</Text>
+            </View>
+
+            {seenInfoLoading ? (
+              <ActivityIndicator size="small" color={THEME.colors.primary} style={{ marginVertical: 24 }} />
+            ) : (() => {
+              const hasSeen = !!seenInfoData?.seenBy?.length;
+              const hasNotSeen = !!seenInfoData?.notSeenBy?.length;
+
+              if (!hasSeen && !hasNotSeen) {
+                return <Text style={styles.seenInfoEmptyText}>Seen By NONE</Text>;
+              }
+
+              return (
+                <ScrollView style={styles.seenInfoList} contentContainerStyle={{ paddingBottom: 8 }}>
+                  {hasSeen && (
+                    <>
+                      <Text style={styles.seenInfoSectionLabel}>
+                        Seen by ({seenInfoData!.seenBy.length})
+                      </Text>
+                      {seenInfoData!.seenBy.map((u) => (
+                        <View key={`seen-${u.userId}`} style={styles.seenInfoRow}>
+                          <MessageTickIcon seen={true} />
+                          <Text style={styles.seenInfoUserName}>{u.userName}</Text>
+                        </View>
+                      ))}
+                    </>
+                  )}
+
+                  {hasNotSeen && (
+                    <>
+                      <Text style={[styles.seenInfoSectionLabel, hasSeen && { marginTop: 16 }]}>
+                        Not seen by ({seenInfoData!.notSeenBy.length})
+                      </Text>
+                      {seenInfoData!.notSeenBy.map((u) => (
+                        <View key={`unseen-${u.userId}`} style={styles.seenInfoRow}>
+                          <MessageTickIcon seen={false} />
+                          <Text style={styles.seenInfoUserName}>{u.userName}</Text>
+                        </View>
+                      ))}
+                    </>
+                  )}
+                </ScrollView>
+              );
+            })()}
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
     </View>
   );
@@ -1923,6 +2099,19 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-end',
     marginTop: 4,
   },
+  messageFooterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-end',
+    marginTop: 4,
+  },
+  messageTimeInline: {
+    fontSize: 9,
+    color: '#64748b',
+  },
+  messageTickWrapper: {
+    marginLeft: 4,
+  },
   chatInputBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1986,10 +2175,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     fontWeight: '700',
   },
+  deletedMessageRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   deletedMessageText: {
     fontSize: 13.5,
     fontStyle: 'italic',
     color: '#64748b',
+    marginLeft: 5,
   },
   editedIndicatorText: {
     fontSize: 10,
@@ -2203,5 +2397,120 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 10,
     fontWeight: 'bold',
+  },
+  optionsModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    justifyContent: 'flex-end',
+  },
+  optionsModalContent: {
+    backgroundColor: '#ffffff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 32,
+    alignItems: 'center',
+  },
+  optionsModalHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#e2e8f0',
+    marginBottom: 16,
+  },
+  optionsModalTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1e293b',
+    marginBottom: 20,
+  },
+  optionsModalButtons: {
+    width: '100%',
+  },
+  optionsModalBtn: {
+    width: '100%',
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  optionsModalBtnText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#0f172a',
+  },
+  optionsModalDeleteBtn: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  optionsModalDeleteBtnText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#ef4444',
+  },
+  optionsModalCancelBtn: {
+    marginTop: 8,
+    borderBottomWidth: 0,
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+  },
+  optionsModalCancelBtnText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#64748b',
+  },
+  seenInfoCloseBtn: {
+    position: 'absolute',
+    top: 12,
+    right: 16,
+    width: 28,
+    height: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  seenInfoTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  seenInfoTitleText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1e293b',
+    marginLeft: 8,
+  },
+  seenInfoList: {
+    width: '100%',
+    maxHeight: 320,
+  },
+  seenInfoSectionLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#94a3b8',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 8,
+  },
+  seenInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  seenInfoUserName: {
+    fontSize: 14,
+    color: '#1e293b',
+    marginLeft: 10,
+    fontWeight: '600',
+  },
+  seenInfoEmptyText: {
+    fontSize: 13,
+    color: '#94a3b8',
+    fontStyle: 'italic',
+    paddingVertical: 8,
   },
 });

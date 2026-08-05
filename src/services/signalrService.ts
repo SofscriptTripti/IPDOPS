@@ -174,8 +174,16 @@ class SignalRService {
       // Listen for generic refresh triggers (casing-safe)
       const refreshMethods = [
         'RefreshChat', 'refreshChat', 'RefreshMessages', 'refreshMessages',
-        'message', 'Message', 'chat', 'Chat', 'Refresh', 'refresh', 'UpdateChat', 'updateChat'
+        'message', 'Message', 'chat', 'Chat', 'Refresh', 'refresh', 'UpdateChat', 'updateChat',
+        'MessageEdited', 'messageEdited', 'MessageUpdated', 'messageUpdated',
+        'MessageDeleted', 'messageDeleted', 'ChatMessageEdited', 'chatMessageEdited',
+        'ChatMessageDeleted', 'chatMessageDeleted', 'ThreadUpdated', 'threadUpdated'
       ];
+      // NOTE: intentionally NOT listening for MessageSeen/MessageRead/etc. here.
+      // The backend broadcasts those right after this client's own chatMarkRead call;
+      // reacting to them by re-fetching (which itself calls chatMarkRead) creates an
+      // infinite read -> broadcast -> refetch -> read loop. The 5s poll in
+      // PatientTimelineScreen already keeps isSeen ticks in sync without this risk.
 
       for (const method of refreshMethods) {
         this.connection.on(method, () => {

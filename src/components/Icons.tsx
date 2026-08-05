@@ -388,6 +388,76 @@ export const CopyIcon = ({ color }: { color: string }) => (
   </View>
 );
 
+// No Entry / Blocked Icon (circle with straight diagonal line)
+export const NoEntryIcon = ({ color }: { color: string }) => (
+  <View style={{ width: 14, height: 14, justifyContent: 'center', alignItems: 'center' }}>
+    <View style={{
+      width: 12,
+      height: 12,
+      borderRadius: 6,
+      borderWidth: 1.6,
+      borderColor: color,
+    }} />
+    <View style={{
+      position: 'absolute',
+      width: 12,
+      height: 1.6,
+      backgroundColor: color,
+      transform: [{ rotate: '45deg' }],
+    }} />
+  </View>
+);
+
+// WhatsApp-style message status tick (double check, grey when sent, blue when seen)
+export const MessageTickIcon = ({ seen }: { seen: boolean }) => {
+  const color = seen ? '#007bbf' : '#94a3b8';
+  const tick = {
+    position: 'absolute' as const,
+    width: 7,
+    height: 4,
+    borderLeftWidth: 1.4,
+    borderBottomWidth: 1.4,
+    borderColor: color,
+    transform: [{ rotate: '-45deg' }],
+  };
+  return (
+    <View style={{ width: 14, height: 8 }}>
+      <View style={[tick, { left: 0 }]} />
+      <View style={[tick, { left: 4 }]} />
+    </View>
+  );
+};
+
+// Close / Cross Icon (X)
+export const CloseIcon = ({ color }: { color: string }) => (
+  <View style={{ width: 16, height: 16, justifyContent: 'center', alignItems: 'center' }}>
+    <View style={{
+      position: 'absolute',
+      width: 14,
+      height: 1.8,
+      backgroundColor: color,
+      borderRadius: 1,
+      transform: [{ rotate: '45deg' }],
+    }} />
+    <View style={{
+      position: 'absolute',
+      width: 14,
+      height: 1.8,
+      backgroundColor: color,
+      borderRadius: 1,
+      transform: [{ rotate: '-45deg' }],
+    }} />
+  </View>
+);
+
+// Info Icon (circle with "i")
+export const InfoIcon = ({ color }: { color: string }) => (
+  <View style={{ width: 16, height: 16, borderRadius: 8, borderWidth: 1.5, borderColor: color, justifyContent: 'center', alignItems: 'center' }}>
+    <View style={{ width: 1.6, height: 1.6, borderRadius: 0.8, backgroundColor: color, marginBottom: 1.5 }} />
+    <View style={{ width: 1.6, height: 5, backgroundColor: color, borderRadius: 0.8 }} />
+  </View>
+);
+
 // Forward Arrow Icon
 export const ForwardIcon = ({ color }: { color: string }) => (
   <View style={{ width: 18, height: 18, justifyContent: 'center', alignItems: 'center' }}>
