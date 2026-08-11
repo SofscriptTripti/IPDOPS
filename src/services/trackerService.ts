@@ -954,4 +954,194 @@ export const trackerService = {
       throw error;
     }
   },
+
+  /**
+   * Fetches the OT Call Register list.
+   */
+  async getOtCallRegisterList(
+    token: string,
+    payload: {
+      cocd: string;
+      div: number;
+      loc: number;
+      userId: string;
+      fromDate: string;
+      toDate: string;
+      status: string;
+      otName: string | null;
+      search: string | null;
+    }
+  ): Promise<any> {
+    const url = `${API_CONFIG.CAREWORKS_TEST_BASE_URL}${API_CONFIG.ENDPOINTS.OT_CALL_REGISTER_LIST}`;
+
+    console.log('====================================');
+    console.log('API OT CALL REGISTER LIST HIT:');
+    console.log('URL:', url);
+    console.log('PARAMS:', JSON.stringify(payload, null, 2));
+    console.log('TOKEN:', token ? `${token.substring(0, 15)}...` : 'NONE');
+    console.log('====================================');
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const text = await response.text();
+      let parsedData: any;
+      try {
+        parsedData = JSON.parse(text);
+      } catch (err) {
+        console.log('====================================');
+        console.log('API OT CALL REGISTER LIST PARSE ERROR (raw):', text);
+        console.log('====================================');
+        throw new Error(`Invalid response format: ${response.status}`);
+      }
+
+      console.log('====================================');
+      console.log('API OT CALL REGISTER LIST RESPONSE:');
+      console.log('STATUS:', response.status);
+      console.log('DATA:', JSON.stringify(parsedData, null, 2));
+      console.log('====================================');
+
+      return parsedData;
+    } catch (error: any) {
+      console.log('====================================');
+      console.log('API OT CALL REGISTER LIST EXCEPTION:', error);
+      console.log('====================================');
+      throw error;
+    }
+  },
+
+  /**
+   * Fetches a single OT Call Register booking's full details.
+   */
+  async getOtBookingById(
+    token: string,
+    payload: {
+      cocd: string;
+      div: number;
+      loc: number;
+      userId: string;
+      id: number;
+    }
+  ): Promise<any> {
+    const url = `${API_CONFIG.CAREWORKS_TEST_BASE_URL}${API_CONFIG.ENDPOINTS.OT_CALL_REGISTER_GET_BY_ID}`;
+
+    console.log('====================================');
+    console.log('API OT CALL REGISTER GET BY ID HIT:');
+    console.log('URL:', url);
+    console.log('PARAMS:', JSON.stringify(payload, null, 2));
+    console.log('TOKEN:', token ? `${token.substring(0, 15)}...` : 'NONE');
+    console.log('====================================');
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const text = await response.text();
+      let parsedData: any;
+      try {
+        parsedData = JSON.parse(text);
+      } catch (err) {
+        console.log('====================================');
+        console.log('API OT CALL REGISTER GET BY ID PARSE ERROR (raw):', text);
+        console.log('====================================');
+        throw new Error(`Invalid response format: ${response.status}`);
+      }
+
+      console.log('====================================');
+      console.log('API OT CALL REGISTER GET BY ID RESPONSE:');
+      console.log('STATUS:', response.status);
+      console.log('DATA:', JSON.stringify(parsedData, null, 2));
+      console.log('====================================');
+
+      return parsedData;
+    } catch (error: any) {
+      console.log('====================================');
+      console.log('API OT CALL REGISTER GET BY ID EXCEPTION:', error);
+      console.log('====================================');
+      throw error;
+    }
+  },
+
+  /**
+   * Updates the clinical clearance / status fields of an OT Call Register booking.
+   */
+  async updateOtBooking(
+    token: string,
+    payload: {
+      cocd: string;
+      div: number;
+      loc: number;
+      userId: string;
+      id: number;
+      cathlabAdvice: string | null;
+      status: string;
+      cbc: string | null;
+      creat: string | null;
+      ptInr: string | null;
+      vdrlHiv: string | null;
+      xray: string | null;
+      echo2d: string | null;
+      mrsa: string | null;
+      bloodThinner: string | null;
+      fitness: string | null;
+      remark: string | null;
+    }
+  ): Promise<any> {
+    const url = `${API_CONFIG.CAREWORKS_TEST_BASE_URL}${API_CONFIG.ENDPOINTS.OT_CALL_REGISTER_UPDATE}`;
+
+    console.log('====================================');
+    console.log('API OT CALL REGISTER UPDATE HIT:');
+    console.log('URL:', url);
+    console.log('PARAMS:', JSON.stringify(payload, null, 2));
+    console.log('TOKEN:', token ? `${token.substring(0, 15)}...` : 'NONE');
+    console.log('====================================');
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const text = await response.text();
+      let parsedData: any;
+      try {
+        parsedData = JSON.parse(text);
+      } catch (err) {
+        console.log('====================================');
+        console.log('API OT CALL REGISTER UPDATE PARSE ERROR (raw):', text);
+        console.log('====================================');
+        throw new Error(`Invalid response format: ${response.status}`);
+      }
+
+      console.log('====================================');
+      console.log('API OT CALL REGISTER UPDATE RESPONSE:');
+      console.log('STATUS:', response.status);
+      console.log('DATA:', JSON.stringify(parsedData, null, 2));
+      console.log('====================================');
+
+      return parsedData;
+    } catch (error: any) {
+      console.log('====================================');
+      console.log('API OT CALL REGISTER UPDATE EXCEPTION:', error);
+      console.log('====================================');
+      throw error;
+    }
+  },
 };

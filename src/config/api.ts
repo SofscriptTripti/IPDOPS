@@ -6,6 +6,7 @@ export const API_CONFIG = {
   AUTH_BASE_URL: 'http://122.179.143.31:86/CareWorksOne/hmisLoginApi/api',
   TRACKER_BASE_URL: 'http://122.179.143.31:86/DischargeTracker/DischargeTrackerApi/api',
   CAREWORKS_BASE_URL: 'http://122.179.143.31:86/CareWorksOne/CareWorksOneApi/api',
+  CAREWORKS_TEST_BASE_URL: 'http://122.179.143.31:86/CareWorksOne_Test/CareWorksOneApi/api',
   ENDPOINTS: {
     LOGIN: '/auth/login',
     LOGOUT: '/auth/logout',
@@ -25,5 +26,8 @@ export const API_CONFIG = {
     CHAT_EDIT_MESSAGE: '/chatEditMessage',
     CHAT_DELETE_MESSAGE: '/chatDeleteMessage',
     CHAT_MESSAGE_SEEN_BY: '/chatGetMessageSeenBy',
+    OT_CALL_REGISTER_LIST: '/otCallRegister/list',
+    OT_CALL_REGISTER_GET_BY_ID: '/otCallRegister/getById',
+    OT_CALL_REGISTER_UPDATE: '/otCallRegister/update',
   },
 };

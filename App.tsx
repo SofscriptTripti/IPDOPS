@@ -4,6 +4,8 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { LoginScreen } from './src/screens/LoginScreen';
 import { DashboardScreen } from './src/screens/DashboardScreen';
 import { BedTurnoverScreen } from './src/screens/BedTurnoverScreen';
+import { OTDashboardScreen, OtCallRegisterItem } from './src/screens/OTDashboardScreen';
+import { OTEditBookingScreen } from './src/screens/OTEditBookingScreen';
 import { PatientTimelineScreen, PatientSessionDetails } from './src/screens/PatientTimelineScreen';
 import { NotificationScreen } from './src/screens/NotificationScreen';
 import { SubModuleSelectionScreen, SubModuleItem } from './src/screens/SubModuleSelectionScreen';
@@ -15,8 +17,21 @@ export default function App() {
   const [isSignedIn, setIsSignedIn] = useState(false);
   const [sessionData, setSessionData] = useState<UserSessionData | null>(null);
   const [selectedSubModule, setSelectedSubModule] = useState<SubModuleItem | null>(null);
-  const [currentScreen, setCurrentScreen] = useState<'Login' | 'SubModuleSelection' | 'Dashboard' | 'BedTurnover' | 'PatientTimeline' | 'Notifications'>('Login');
+  const [currentScreen, setCurrentScreen] = useState<'Login' | 'SubModuleSelection' | 'Dashboard' | 'BedTurnover' | 'OTDashboard' | 'OTEditBooking' | 'PatientTimeline' | 'Notifications'>('Login');
   const [selectedPatient, setSelectedPatient] = useState<PatientSessionDetails | null>(null);
+  const [selectedOtBooking, setSelectedOtBooking] = useState<OtCallRegisterItem | null>(null);
+  const [otDashboardRefreshKey, setOtDashboardRefreshKey] = useState(0);
+
+  // Dashboard/BedTurnover/OTDashboard stay mounted (display:none) once visited so
+  // switching between them preserves scroll/filter state. But mounting them eagerly
+  // fires all of their startup API calls at once, so only mount each the first time
+  // it's actually navigated to.
+  const [visitedScreens, setVisitedScreens] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    if (currentScreen === 'Dashboard' || currentScreen === 'BedTurnover' || currentScreen === 'OTDashboard') {
+      setVisitedScreens(prev => (prev[currentScreen] ? prev : { ...prev, [currentScreen]: true }));
+    }
+  }, [currentScreen]);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isCheckingRights, setIsCheckingRights] = useState(false);
   const [hasLoadedTimelineOnce, setHasLoadedTimelineOnce] = useState(false);
@@ -60,9 +75,14 @@ export default function App() {
       if (currentScreen === 'SubModuleSelection' || currentScreen === 'Login') {
         return false; // Exit app normally
       }
-      if (currentScreen === 'Dashboard') {
+      if (currentScreen === 'Dashboard' || currentScreen === 'OTDashboard') {
         setSelectedSubModule(null);
         setCurrentScreen('SubModuleSelection');
+        return true;
+      }
+      if (currentScreen === 'OTEditBooking') {
+        setSelectedOtBooking(null);
+        setCurrentScreen('OTDashboard');
         return true;
       }
       if (selectedSubModule?.SubModCd === 1384) {
@@ -148,6 +168,8 @@ export default function App() {
         setSelectedSubModule(subModule);
         if (subModule.SubModCd === 1384) {
           setCurrentScreen('BedTurnover');
+        } else if (subModule.SubModCd === 1385) {
+          setCurrentScreen('OTDashboard');
         } else {
           setCurrentScreen('Dashboard');
         }
@@ -165,6 +187,8 @@ export default function App() {
       setSelectedSubModule(subModule);
       if (subModule.SubModCd === 1384) {
         setCurrentScreen('BedTurnover');
+      } else if (subModule.SubModCd === 1385) {
+        setCurrentScreen('OTDashboard');
       } else {
         setCurrentScreen('Dashboard');
       }
@@ -179,7 +203,9 @@ export default function App() {
     setSessionData(null);
     setSelectedSubModule(null);
     setSelectedPatient(null);
+    setSelectedOtBooking(null);
     setHasLoadedTimelineOnce(false);
+    setVisitedScreens({});
     setCurrentScreen('Login');
   };
 
@@ -208,6 +234,20 @@ export default function App() {
 
   const handleNavigateToNotifications = () => {
     setCurrentScreen('Notifications');
+  };
+
+  const handleEditOtBooking = (booking: OtCallRegisterItem) => {
+    setSelectedOtBooking(booking);
+    setCurrentScreen('OTEditBooking');
+  };
+
+  const handleBackToOtDashboard = () => {
+    setSelectedOtBooking(null);
+    setCurrentScreen('OTDashboard');
+  };
+
+  const handleOtBookingSaved = () => {
+    setOtDashboardRefreshKey(prev => prev + 1);
   };
 
   // Check date on render to immediately intercept and block screen rendering if expired
@@ -257,25 +297,47 @@ export default function App() {
         />
       ) : (
         <View style={{ flex: 1 }}>
-          <View style={{ flex: 1, display: currentScreen === 'Dashboard' ? 'flex' : 'none' }}>
-            <DashboardScreen
+          {visitedScreens.Dashboard && (
+            <View style={{ flex: 1, display: currentScreen === 'Dashboard' ? 'flex' : 'none' }}>
+              <DashboardScreen
+                sessionData={sessionData}
+                selectedSubModule={selectedSubModule}
+                onLogout={handleLogout}
+                onNavigateToBedTurnover={handleNavigateToBedTurnover}
+                onNavigateToTimeline={handleNavigateToTimeline}
+                onNavigateToNotifications={handleNavigateToNotifications}
+                onBackToSubModuleSelection={handleBackToSubModuleSelection}
+              />
+            </View>
+          )}
+          {visitedScreens.BedTurnover && (
+            <View style={{ flex: 1, display: currentScreen === 'BedTurnover' ? 'flex' : 'none' }}>
+              <BedTurnoverScreen
+                sessionData={sessionData}
+                onBack={handleBackToDashboard}
+                visible={currentScreen === 'BedTurnover'}
+                selectedSubModule={selectedSubModule}
+              />
+            </View>
+          )}
+          {visitedScreens.OTDashboard && (
+            <View style={{ flex: 1, display: currentScreen === 'OTDashboard' ? 'flex' : 'none' }}>
+              <OTDashboardScreen
+                sessionData={sessionData}
+                onBack={handleBackToSubModuleSelection}
+                onEditBooking={handleEditOtBooking}
+                refreshSignal={otDashboardRefreshKey}
+              />
+            </View>
+          )}
+          {currentScreen === 'OTEditBooking' && selectedOtBooking && (
+            <OTEditBookingScreen
               sessionData={sessionData}
-              selectedSubModule={selectedSubModule}
-              onLogout={handleLogout}
-              onNavigateToBedTurnover={handleNavigateToBedTurnover}
-              onNavigateToTimeline={handleNavigateToTimeline}
-              onNavigateToNotifications={handleNavigateToNotifications}
-              onBackToSubModuleSelection={handleBackToSubModuleSelection}
+              booking={selectedOtBooking}
+              onBack={handleBackToOtDashboard}
+              onSaved={handleOtBookingSaved}
             />
-          </View>
-          <View style={{ flex: 1, display: currentScreen === 'BedTurnover' ? 'flex' : 'none' }}>
-            <BedTurnoverScreen 
-              sessionData={sessionData} 
-              onBack={handleBackToDashboard} 
-              visible={currentScreen === 'BedTurnover'} 
-              selectedSubModule={selectedSubModule}
-            />
-          </View>
+          )}
           {currentScreen === 'PatientTimeline' && selectedPatient && (
             <PatientTimelineScreen 
               patient={selectedPatient} 
