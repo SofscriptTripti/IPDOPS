@@ -41,6 +41,14 @@ import { PatientSessionDetails } from './PatientTimelineScreen';
 import { LoadingIndicator } from '../components/LoadingIndicator';
 import { trackerService } from '../services/trackerService';
 
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+];
+
+const getDaysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
+const getFirstDayOfMonth = (year: number, month: number) => new Date(year, month, 1).getDay();
+
 interface DashboardScreenProps {
   sessionData: UserSessionData;
   selectedSubModule: SubModuleItem | null;
@@ -95,6 +103,10 @@ export const DashboardScreen = ({
   const [activeBottomTab, setActiveBottomTab] = useState<'Dashboard' | 'Patients' | 'Reports' | 'Profile'>('Dashboard');
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
+  const [currentYear, setCurrentYear] = useState<number>(new Date().getFullYear());
+  const [currentMonth, setCurrentMonth] = useState<number>(new Date().getMonth());
+  const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth());
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [startDate, setStartDate] = useState<number | null>(new Date().getDate() || 15);
   const [endDate, setEndDate] = useState<number | null>(new Date().getDate() || 15);
   const [tempStart, setTempStart] = useState<number | null>(new Date().getDate() || 15);
@@ -140,8 +152,9 @@ export const DashboardScreen = ({
       setIsFetchingTracker(true);
     }
     try {
-      const fromDateStr = `2026-07-${String(startDate).padStart(2, '0')}`;
-      const toDateStr = `2026-07-${String(endDate || startDate).padStart(2, '0')}`;
+      const fromMonthStr = String(selectedMonth + 1).padStart(2, '0');
+      const fromDateStr = `${selectedYear}-${fromMonthStr}-${String(startDate).padStart(2, '0')}`;
+      const toDateStr = `${selectedYear}-${fromMonthStr}-${String(endDate || startDate).padStart(2, '0')}`;
       const wrdCdParam = selectedWard ? String(selectedWard.Cd) : '';
       
       console.log(`Fetching dashboard data for date range: ${fromDateStr} to ${toDateStr}, ward: ${wrdCdParam}`);
@@ -251,6 +264,7 @@ export const DashboardScreen = ({
             paymentBy: p.PtnPayTyp || 'CASH',
             patientType: p.PatientType || 'SELF PAYING',
             stages: formattedStages,
+            advGivenTm: p.DschgAdvGivenTm || null,
           } as PatientSessionDetails;
         });
 
@@ -266,7 +280,7 @@ export const DashboardScreen = ({
     } finally {
       setIsFetchingTracker(false);
     }
-  }, [startDate, endDate, sessionData, selectedWard]);
+  }, [startDate, endDate, selectedMonth, selectedYear, sessionData, selectedWard]);
 
   // Fetch ward list on mount
   useEffect(() => {
@@ -276,7 +290,7 @@ export const DashboardScreen = ({
   // Fetch dashboard data when dependencies change
   useEffect(() => {
     fetchDashboardData();
-  }, [fetchDashboardData, startDate, endDate, selectedWard, sessionData]);
+  }, [fetchDashboardData, startDate, endDate, selectedMonth, selectedYear, selectedWard, sessionData]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -292,13 +306,37 @@ export const DashboardScreen = ({
     }
   }, [fetchWards, fetchDashboardData]);
 
-  // Sync temp dates to confirmed dates when calendar opens
+  // Sync temp dates and viewed month/year when calendar opens
   useEffect(() => {
     if (showCalendar) {
       setTempStart(startDate);
       setTempEnd(endDate);
+      setCurrentMonth(selectedMonth);
+      setCurrentYear(selectedYear);
     }
-  }, [showCalendar, startDate, endDate]);
+  }, [showCalendar, startDate, endDate, selectedMonth, selectedYear]);
+
+  const handlePrevMonth = () => {
+    if (currentMonth === 0) {
+      setCurrentMonth(11);
+      setCurrentYear(prev => prev - 1);
+    } else {
+      setCurrentMonth(prev => prev - 1);
+    }
+    setTempStart(null);
+    setTempEnd(null);
+  };
+
+  const handleNextMonth = () => {
+    if (currentMonth === 11) {
+      setCurrentMonth(0);
+      setCurrentYear(prev => prev + 1);
+    } else {
+      setCurrentMonth(prev => prev + 1);
+    }
+    setTempStart(null);
+    setTempEnd(null);
+  };
 
   const handleDatePress = (day: number) => {
     if (tempStart === null || (tempStart !== null && tempEnd !== null)) {
@@ -622,10 +660,10 @@ export const DashboardScreen = ({
           >
             <CalendarIcon color={THEME.colors.textMedium} />
             <Text style={styles.datePickerText}>
-              {startDate && endDate 
-                ? `July ${String(startDate).padStart(2, '0')}–${String(endDate).padStart(2, '0')}` 
+              {startDate && endDate && startDate !== endDate
+                ? `${MONTH_NAMES[selectedMonth]} ${String(startDate).padStart(2, '0')}–${String(endDate).padStart(2, '0')}, ${selectedYear}` 
                 : startDate 
-                ? `July ${String(startDate).padStart(2, '0')}` 
+                ? `${MONTH_NAMES[selectedMonth]} ${String(startDate).padStart(2, '0')}, ${selectedYear}` 
                 : 'Select dates'}
             </Text>
           </TouchableOpacity>
@@ -736,9 +774,22 @@ export const DashboardScreen = ({
             <View style={styles.calendarHeader}>
               <Text style={styles.calendarHeaderTitle}>Select Date Range</Text>
               <Text style={styles.calendarHeaderSubtitle}>
-                {tempStart ? `From July ${String(tempStart).padStart(2, '0')}` : 'Select start date'}
-                {tempEnd ? ` to July ${String(tempEnd).padStart(2, '0')}` : ''}
+                {tempStart ? `From ${MONTH_NAMES[currentMonth]} ${String(tempStart).padStart(2, '0')}` : 'Select start date'}
+                {tempEnd ? ` to ${MONTH_NAMES[currentMonth]} ${String(tempEnd).padStart(2, '0')}` : ''}
               </Text>
+            </View>
+
+            {/* Month/Year Navigation Selector */}
+            <View style={styles.monthSelectorRow}>
+              <TouchableOpacity onPress={handlePrevMonth} style={styles.monthNavBtn}>
+                <Text style={styles.monthNavText}>{"<"}</Text>
+              </TouchableOpacity>
+              <Text style={styles.monthLabelText}>
+                {`${MONTH_NAMES[currentMonth]} ${currentYear}`}
+              </Text>
+              <TouchableOpacity onPress={handleNextMonth} style={styles.monthNavBtn}>
+                <Text style={styles.monthNavText}>{">"}</Text>
+              </TouchableOpacity>
             </View>
 
             {/* Weekdays Row */}
@@ -750,13 +801,13 @@ export const DashboardScreen = ({
 
             {/* Days Grid */}
             <View style={styles.daysGrid}>
-              {/* Empty placeholder cells for offset (July 1st, 2026 is a Wednesday = 3 empty cells) */}
-              {Array.from({ length: 3 }).map((_, idx) => (
+              {/* Empty placeholder cells for offset based on month/year */}
+              {Array.from({ length: getFirstDayOfMonth(currentYear, currentMonth) }).map((_, idx) => (
                 <View key={`empty-${idx}`} style={styles.emptyDayCell} />
               ))}
 
-              {/* Day cells 1 to 31 */}
-              {Array.from({ length: 31 }).map((_, idx) => {
+              {/* Day cells dynamically sized for selected month */}
+              {Array.from({ length: getDaysInMonth(currentYear, currentMonth) }).map((_, idx) => {
                 const day = idx + 1;
                 const isStart = tempStart === day;
                 const isEnd = tempEnd === day;
@@ -823,6 +874,8 @@ export const DashboardScreen = ({
                       setStartDate(tempStart);
                       setEndDate(tempEnd);
                     }
+                    setSelectedMonth(currentMonth);
+                    setSelectedYear(currentYear);
                     setShowCalendar(false);
                   }}
                 >
@@ -1527,6 +1580,33 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(15, 23, 42, 0.45)', // Sleek dark translucent overlay
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  monthSelectorRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  monthNavBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#f1f5f9',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  monthNavText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  monthLabelText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1e293b',
   },
   calendarModalContent: {
     backgroundColor: '#ffffff',

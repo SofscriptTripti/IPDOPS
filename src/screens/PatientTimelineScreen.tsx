@@ -58,6 +58,7 @@ export interface PatientSessionDetails {
   totalTat?: string;
   bedTurnoverTat?: string;
   remarks?: string | null;
+  advGivenTm?: string | null;
 }
 
 export interface ChatMessage {
@@ -125,26 +126,93 @@ const formatTatEquation = (
 
 const getStageColorCode = (p: any, sIdx: number): number => {
   if (!p) return 0;
+
+  // 1. First, check if NewStageColors or StageColors is present in p
   if (p.NewStageColors && typeof p.NewStageColors === 'string') {
     const arr = p.NewStageColors.split(',');
     if (arr[sIdx] !== undefined) {
-      return parseInt(arr[sIdx], 10) || 0;
+      const code = parseInt(arr[sIdx], 10);
+      if (!isNaN(code) && code > 0) return code;
     }
-  }
-  const key = `NewT${sIdx + 1}Status`;
-  if (p[key] !== undefined && p[key] !== null) {
-    return parseInt(p[key], 10) || 0;
   }
   if (p.StageColors && typeof p.StageColors === 'string') {
     const arr = p.StageColors.split(',');
     if (arr[sIdx] !== undefined) {
-      return parseInt(arr[sIdx], 10) || 0;
+      const code = parseInt(arr[sIdx], 10);
+      if (!isNaN(code) && code > 0) return code;
     }
+  }
+
+  // 2. Map individual fields from the details API response
+  let val: any = undefined;
+  switch (sIdx) {
+    case 0: // T1: Discharge Advice
+      val = p.TATDschgAdvGivenTm ?? p.NewTATDschgAdvGivenTm;
+      break;
+    case 1: // T2: Discharge Summary (Provisional)
+      val = p.NewTATDschgSumProvTAT ?? p.DschgSumProvTAT;
+      break;
+    case 2: // T3: Last Indent by Nursing
+      val = p.NewTATLastIssueReqDtTmTAT ?? p.LastIssueReqDtTmTAT;
+      break;
+    case 3: // T4: Last Issue by Pharmacy
+      val = p.NewTATLastIssDtTmTAT ?? p.LastIssDtTmTAT;
+      break;
+    case 4: // T5: Last Issue Return Request (Nurse)
+      val = p.NewTATLastIssReturnReqDtTmTAT ?? p.LastIssReturnReqDtTmTAT;
+      break;
+    case 5: // T6: Last Return Acknowledged by Pharmacy
+      val = p.NewTATLastIssReturnDtTmTAT ?? p.LastIssReturnDtTmTAT;
+      break;
+    case 6: // T7: Last Nursing Acknowledgement
+      val = p.NewTATLastNurseAcknIssDtTmTAT ?? p.LastNurseAcknIssDtTmTAT;
+      break;
+    case 7: // T8: Discharge Summary (Final)
+      val = p.NewTATDschgSumFinalTAT ?? p.DschgSumFinalTAT;
+      break;
+    case 8: // T9: Last Bill Prepared
+      val = p.NewTATLastBillDtTmTat ?? p.LastBillDtTmTAT;
+      break;
+    case 9: // T10: Bill Handed Over to Relative
+      val = p.NewTATLastBillHandOverTAT ?? p.LastBillHandOverTAT;
+      break;
+    case 10: // T11: Bill Sent to TPA
+      val = p.NewTATLastTPAInternalTAT ?? p.LastTPAInternalTAT;
+      break;
+    case 11: // T12: Sent for Claim Approval
+      val = p.NewTATClaimApprSentTAT ?? p.ClaimApprSentTAT;
+      break;
+    case 12: // T13: TPA Approved
+      val = p.NewTATLastTPATAT ?? p.NewTATLastTPAApprTAT1 ?? p.LastTPATAT;
+      break;
+    case 13: // T14: Final Billing Settlement
+      val = p.NewTATLastStlmtDtTmTAT ?? p.LastStlmtDtTmTAT;
+      break;
+    case 14: // T15: Bed Vacant Time / Pt. Physically Left
+      val = p.NewTATDischargeTAT ?? p.TATDischargeTAT ?? p.TATLastPatienTAT ?? p.NewTATLastPatienTAT;
+      break;
+    case 15: // T16: Bed Ready
+      val = p.NewTATLastBedReadyTAT ?? p.LastBedReadyTAT;
+      break;
+  }
+
+  if (val !== undefined && val !== null) {
+    const code = parseInt(String(val), 10);
+    if (!isNaN(code) && code > 0) return code;
+  }
+
+  // 3. Try fallback to NewT${sIdx+1}Status or T${sIdx+1}Status
+  const key = `NewT${sIdx + 1}Status`;
+  if (p[key] !== undefined && p[key] !== null) {
+    const code = parseInt(p[key], 10);
+    if (!isNaN(code) && code > 0) return code;
   }
   const oldKey = `T${sIdx + 1}Status`;
   if (p[oldKey] !== undefined && p[oldKey] !== null) {
-    return parseInt(p[oldKey], 10) || 0;
+    const code = parseInt(p[oldKey], 10);
+    if (!isNaN(code) && code > 0) return code;
   }
+
   return 0;
 };
 
@@ -725,8 +793,15 @@ export const PatientTimelineScreen = ({
         const ipnoVal = ipNumberStr ? parseInt(ipNumberStr, 10) : null;
         
         if (ipnoVal) {
-          let startStr = '2026-07-01';
-          let endStr = '2026-07-15';
+          let yearVal = '2026';
+          if (patient?.advGivenTm && patient.advGivenTm.length >= 4) {
+            yearVal = patient.advGivenTm.substring(0, 4);
+          } else {
+            yearVal = String(new Date().getFullYear());
+          }
+
+          let startStr = `${yearVal}-07-01`;
+          let endStr = `${yearVal}-07-15`;
 
           if (patient?.dateRange && patient.dateRange.includes('/')) {
             const match = patient.dateRange.match(/(\d{2})\/(\d{2})/);
@@ -739,8 +814,8 @@ export const PatientTimelineScreen = ({
               const startDayStr = startDay < 10 ? `0${startDay}` : `${startDay}`;
               const endDayStr = endDay < 10 ? `0${endDay}` : `${endDay}`;
               
-              startStr = `2026-${month}-${startDayStr}`;
-              endStr = `2026-${month}-${endDayStr}`;
+              startStr = `${yearVal}-${month}-${startDayStr}`;
+              endStr = `${yearVal}-${month}-${endDayStr}`;
             }
           } else {
             try {
@@ -759,8 +834,8 @@ export const PatientTimelineScreen = ({
               startStr = `${fYear}-${fMonth}-${fDay}`;
               endStr = `${tYear}-${tMonth}-${tDay}`;
             } catch (e) {
-              startStr = '2026-07-01';
-              endStr = '2026-07-15';
+              startStr = `${yearVal}-07-01`;
+              endStr = `${yearVal}-07-15`;
             }
           }
 
@@ -800,6 +875,12 @@ export const PatientTimelineScreen = ({
 
             const formattedStages = stageNames.map((name, sIdx) => {
               let colorCode = getStageColorCode(p, sIdx);
+              if (colorCode === 0 && patient?.stages?.[sIdx]) {
+                const prevStatus = patient.stages[sIdx].status;
+                if (prevStatus === 'green') colorCode = 1;
+                else if (prevStatus === 'orange') colorCode = 2;
+                else if (prevStatus === 'red') colorCode = 3;
+              }
               let timeStr = '';
               let diffText = '';
               let oldDiffText = '';
