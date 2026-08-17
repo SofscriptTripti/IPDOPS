@@ -3,9 +3,10 @@ export const API_CONFIG = {
   // BASE_URL: 'http://123.108.45.16:8650/hmisloginapi/api',
 
   // Active Base URLs:
-  AUTH_BASE_URL: 'http://122.179.143.31:86/CareWorksOne/hmisLoginApi/api',
+  AUTH_BASE_URL: 'http://122.179.143.31:86/CareWorksOne_Test/hmisLoginApi/api',
   TRACKER_BASE_URL: 'http://122.179.143.31:86/DischargeTracker/DischargeTrackerApi/api',
-  CAREWORKS_BASE_URL: 'http://122.179.143.31:86/CareWorksOne/CareWorksOneApi/api',
+  // CAREWORKS_BASE_URL: 'http://122.179.143.31:86/CareWorksOne/CareWorksOneApi/api',
+  CAREWORKS_BASE_URL: 'http://122.179.143.31:86/CareWorksOne_Test/CareWorksOneApi/api',
   CAREWORKS_TEST_BASE_URL: 'http://122.179.143.31:86/CareWorksOne_Test/CareWorksOneApi/api',
   ENDPOINTS: {
     LOGIN: '/auth/login',

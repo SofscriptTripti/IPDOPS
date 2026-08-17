@@ -13,6 +13,7 @@ import {
   RefreshControl,
   Modal,
   Share,
+  NativeModules,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { THEME } from '../constants/theme';
@@ -97,6 +98,20 @@ const formatShortDate = (value: string | null): string => {
   if (!d) return '--';
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}`;
+};
+
+const formatBookingDateTime = (value: string | null): string => {
+  const d = parseApiDate(value);
+  if (!d) return '--';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const datePart = `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+  if (value && value.includes('T')) {
+    const timePart = value.split('T')[1];
+    if (timePart && timePart !== '00:00:00') {
+      return `${datePart} ${timePart.substring(0, 5)}`;
+    }
+  }
+  return datePart;
 };
 
 const isSameDay = (a: Date, b: Date) =>
@@ -268,29 +283,199 @@ export const OTDashboardScreen = ({ sessionData, onBack, onEditBooking, refreshS
     if (filteredRecords.length === 0) {
       return;
     }
-    const header = 'Patient Name,Patient No,Ward,OT,Surgery,Surgeon,Date,From,To,Status,Clearance';
-    const rows = filteredRecords.map(r => [
-      r.patientName || '',
-      r.patientNo || '',
-      r.ward || '',
-      r.otName || '',
-      (r.surgeryName || '').replace(/,/g, ';'),
-      (r.surgeonDoctor || '').replace(/,/g, ';'),
-      formatDMY(r.actualSurgeryDate),
-      r.fromTime || '',
-      r.toTime || '',
-      r.status || '',
-      r.clearance || '',
-    ].join(','));
-    const csv = [header, ...rows].join('\n');
+
+    const rowsHtml = filteredRecords.map((r, idx) => {
+      const actualDate = formatDMY(r.actualSurgeryDate);
+      const timeStr = `${r.fromTime || '--:--'} - ${r.toTime || '--:--'}`;
+      
+      const valCbc = (r.cbc || '').trim().toUpperCase();
+      const valCreat = (r.creat || '').trim().toUpperCase();
+      const valPtInr = (r.ptInr || '').trim().toUpperCase();
+      const valVdrlHiv = (r.vdrlHiv || '').trim().toUpperCase();
+      const valXray = (r.xray || '').trim().toUpperCase();
+      const valEcho2d = (r.echo2d || '').trim().toUpperCase();
+      const valMrsa = (r.mrsa || '').trim().toUpperCase();
+      const valBloodThinner = (r.bloodThinner || '').trim().toUpperCase();
+      const valFitness = (r.fitness || '').trim().toUpperCase();
+
+      const getValClass = (val: string) => {
+        if (val === 'Y') return 'val-y';
+        if (val === 'N') return 'val-n';
+        return 'val-null';
+      };
+
+      const getValText = (val: string, label: string) => {
+        if (val === 'Y') return `${label}: Y`;
+        if (val === 'N') return `${label}: N`;
+        return `${label}: —`;
+      };
+
+      return `
+        <tr class="${idx % 2 === 0 ? 'even' : 'odd'}">
+          <td style="font-weight: bold; color: #0f172a;">${r.patientName || '--'}</td>
+          <td>${r.patientNo || '--'}</td>
+          <td style="text-align: center;">${r.ward || '--'}</td>
+          <td style="text-align: center;">${r.otName || '--'}</td>
+          <td style="font-size: 11px; max-width: 150px; word-break: break-word;">${r.surgeryName || '--'}</td>
+          <td style="font-size: 11px;">DR. ${r.surgeonDoctor || '--'}</td>
+          <td style="text-align: center;">${actualDate}<br/><span style="font-size: 9px; color: #64748b;">${timeStr}</span></td>
+          <td style="text-align: center;"><span class="badge status-${(r.status || 'OPEN').toLowerCase()}">${r.status || 'OPEN'}</span></td>
+          <td style="font-size: 10px;">
+            <div class="grid-checks">
+              <span class="chk ${getValClass(valCbc)}">${getValText(valCbc, 'CBC')}</span>
+              <span class="chk ${getValClass(valCreat)}">${getValText(valCreat, 'Creat')}</span>
+              <span class="chk ${getValClass(valPtInr)}">${getValText(valPtInr, 'PT/INR')}</span>
+              <span class="chk ${getValClass(valVdrlHiv)}">${getValText(valVdrlHiv, 'VDRL/HIV')}</span>
+              <span class="chk ${getValClass(valXray)}">${getValText(valXray, 'X-Ray')}</span>
+              <span class="chk ${getValClass(valEcho2d)}">${getValText(valEcho2d, '2D Echo')}</span>
+              <span class="chk ${getValClass(valMrsa)}">${getValText(valMrsa, 'MRSA')}</span>
+              <span class="chk ${getValClass(valBloodThinner)}">${getValText(valBloodThinner, 'Thinner')}</span>
+              <span class="chk ${getValClass(valFitness)}">${getValText(valFitness, 'Fitness')}</span>
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <style>
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            color: #1e293b;
+            background-color: #ffffff;
+            font-size: 11px;
+          }
+          h1 {
+            color: #0b665c;
+            font-size: 20px;
+            margin: 0 0 5px 0;
+            text-align: center;
+          }
+          .subtitle {
+            text-align: center;
+            font-size: 11px;
+            color: #64748b;
+            margin-bottom: 20px;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+          }
+          th {
+            background-color: #0b665c;
+            color: #ffffff;
+            font-weight: bold;
+            text-align: left;
+            padding: 8px 6px;
+            font-size: 11px;
+            border: 1px solid #084d45;
+          }
+          td {
+            padding: 8px 6px;
+            border: 1px solid #e2e8f0;
+            vertical-align: middle;
+            font-size: 10.5px;
+          }
+          tr.even {
+            background-color: #f8fafc;
+          }
+          .badge {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 9px;
+            font-weight: bold;
+          }
+          .status-open {
+            background-color: #e0f2fe;
+            color: #0369a1;
+          }
+          .status-closed {
+            background-color: #dcfce7;
+            color: #15803d;
+          }
+          .status-cancelled {
+            background-color: #fee2e2;
+            color: #b91c1c;
+          }
+          .grid-checks {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 2px;
+          }
+          .chk {
+            display: inline-block;
+            font-size: 8.5px;
+            padding: 1px 3px;
+            border-radius: 2px;
+            text-align: center;
+            font-weight: 600;
+          }
+          .val-y {
+            background-color: #dcfce7;
+            color: #15803d;
+          }
+          .val-n {
+            background-color: #fee2e2;
+            color: #b91c1c;
+          }
+          .val-null {
+            background-color: #f1f5f9;
+            color: #64748b;
+          }
+          @media print {
+            body {
+              padding: 0;
+            }
+            thead {
+              display: table-header-group;
+            }
+          }
+        </style>
+      </head>
+      <body>
+        <h1>OT Call Register</h1>
+        <div class="subtitle">Generated on ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}</div>
+        <table>
+          <thead>
+            <tr>
+              <th>Patient Name</th>
+              <th>Reg No.</th>
+              <th style="text-align: center;">Ward</th>
+              <th style="text-align: center;">OT</th>
+              <th>Surgery Name</th>
+              <th>Surgeon</th>
+              <th style="text-align: center;">Date & Time</th>
+              <th style="text-align: center;">Status</th>
+              <th>Checklist Items</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml}
+          </tbody>
+        </table>
+      </body>
+      </html>
+    `;
 
     try {
-      await Share.share({
-        title: 'OT Call Register',
-        message: csv,
-      });
+      if (Platform.OS === 'android' && NativeModules.PdfModule) {
+        NativeModules.PdfModule.printHTML(htmlContent, 'OT_Call_Register');
+      } else {
+        await Share.share({
+          title: 'OT Call Register',
+          message: htmlContent,
+        });
+      }
     } catch (err) {
-      console.warn('Failed to share OT Call Register export:', err);
+      console.warn('Failed to share/print OT Call Register:', err);
     }
   };
 
@@ -471,54 +656,34 @@ export const OTDashboardScreen = ({ sessionData, onBack, onEditBooking, refreshS
 
           <View style={styles.actionLinksRow}>
             <TouchableOpacity activeOpacity={0.7} onPress={handleExport}>
-              <Text style={styles.actionLinkText}>Export</Text>
+              <Text style={styles.actionLinkText}>Download List</Text>
             </TouchableOpacity>
-            <TouchableOpacity activeOpacity={0.7} onPress={handleExport}>
-              <Text style={styles.actionLinkText}>Print</Text>
-            </TouchableOpacity>
+           
           </View>
         </View>
 
-        {/* Clearance filter — a colored bordered badge (Yes/No/—) plus a plain label outside it */}
+        {/* Color Legend — a colored bordered badge (Yes/No/—) plus a plain label outside it */}
         <View style={styles.clearanceRow}>
-          <TouchableOpacity
-            activeOpacity={0.8}
-            style={styles.clearanceItem}
-            onPress={() => setClearanceFilter(clearanceFilter === 'Done' ? 'All' : 'Done')}
-          >
-            <View style={[styles.clearanceBadge, styles.clearanceBadgeDone, clearanceFilter === 'Done' && styles.clearanceBadgeDoneActive]}>
-              <Text style={[styles.clearanceBadgeTextDone, clearanceFilter === 'Done' && styles.clearanceBadgeTextActive]}>
-                Yes
-              </Text>
+          <View style={styles.clearanceItem}>
+            <View style={[styles.clearanceBadge, styles.clearanceBadgeDone]}>
+              <Text style={styles.clearanceBadgeTextDone}>Yes</Text>
             </View>
             <Text style={styles.clearanceItemLabel} numberOfLines={1}>Done</Text>
-          </TouchableOpacity>
+          </View>
 
-          <TouchableOpacity
-            activeOpacity={0.8}
-            style={styles.clearanceItem}
-            onPress={() => setClearanceFilter(clearanceFilter === 'NotDone' ? 'All' : 'NotDone')}
-          >
-            <View style={[styles.clearanceBadge, styles.clearanceBadgeNotDone, clearanceFilter === 'NotDone' && styles.clearanceBadgeNotDoneActive]}>
-              <Text style={[styles.clearanceBadgeTextNotDone, clearanceFilter === 'NotDone' && styles.clearanceBadgeTextActive]}>
-                No
-              </Text>
+          <View style={styles.clearanceItem}>
+            <View style={[styles.clearanceBadge, styles.clearanceBadgeNotDone]}>
+              <Text style={styles.clearanceBadgeTextNotDone}>No</Text>
             </View>
             <Text style={styles.clearanceItemLabel} numberOfLines={1}>Not done</Text>
-          </TouchableOpacity>
+          </View>
 
-          <TouchableOpacity
-            activeOpacity={0.8}
-            style={styles.clearanceItem}
-            onPress={() => setClearanceFilter(clearanceFilter === 'Blank' ? 'All' : 'Blank')}
-          >
-            <View style={[styles.clearanceBadge, styles.clearanceBadgeBlank, clearanceFilter === 'Blank' && styles.clearanceBadgeBlankActive]}>
-              <Text style={[styles.clearanceBadgeTextBlank, clearanceFilter === 'Blank' && styles.clearanceBadgeTextActive]}>
-                —
-              </Text>
+          <View style={styles.clearanceItem}>
+            <View style={[styles.clearanceBadge, styles.clearanceBadgeBlank]}>
+              <Text style={styles.clearanceBadgeTextBlank}>—</Text>
             </View>
             <Text style={styles.clearanceItemLabel} numberOfLines={1}>Blank</Text>
-          </TouchableOpacity>
+          </View>
         </View>
 
         {/* List */}
@@ -554,9 +719,11 @@ export const OTDashboardScreen = ({ sessionData, onBack, onEditBooking, refreshS
                 <View style={styles.cardTopRow}>
                   <Text style={styles.cardPatientName} numberOfLines={1}>{item.patientName || '--'}</Text>
                   <View style={styles.cardBadgesRow}>
-                    {isToday(item.actualSurgeryDate) && (
-                      <View style={styles.todayBadge}>
-                        <Text style={styles.todayBadgeText}>TODAY</Text>
+                    {item.otBookingDate && (
+                      <View style={styles.bookingBadge}>
+                        <Text style={styles.bookingBadgeText}>
+                          {formatBookingDateTime(item.otBookingDate)}
+                        </Text>
                       </View>
                     )}
                     <View style={[styles.statusBadge, { backgroundColor: statusColors.bg }]}>
@@ -582,20 +749,32 @@ export const OTDashboardScreen = ({ sessionData, onBack, onEditBooking, refreshS
                 <View style={styles.chipsRow}>
                   {CHECKLIST_ITEMS.map(chip => {
                     const value = item[chip.key] as string | null;
-                    const filled = !!(value && String(value).trim());
+                    const valTrimmed = value ? String(value).trim().toUpperCase() : '';
+
+                    let bgStyle = styles.chipNull;
+                    let textStyle = styles.chipTextNull;
+
+                    if (valTrimmed === 'Y') {
+                      bgStyle = styles.chipYes;
+                      textStyle = styles.chipTextYes;
+                    } else if (valTrimmed === 'N') {
+                      bgStyle = styles.chipNo;
+                      textStyle = styles.chipTextNo;
+                    }
+
                     return (
                       <View
                         key={String(chip.key)}
-                        style={[styles.chip, filled ? styles.chipDone : styles.chipPending]}
+                        style={[styles.chip, bgStyle]}
                       >
-                        <Text style={[styles.chipText, filled ? styles.chipTextDone : styles.chipTextPending]}>
+                        <Text style={[styles.chipText, textStyle]}>
                           {chip.label}
                         </Text>
                       </View>
                     );
                   })}
                 </View>
-
+{/* 
                 <View style={styles.cardFooterRow}>
                   <Text style={styles.cardFooterText}>Surgery · {formatDMY(item.actualSurgeryDate)}</Text>
                   <View style={styles.clearanceIndicatorRow}>
@@ -604,7 +783,7 @@ export const OTDashboardScreen = ({ sessionData, onBack, onEditBooking, refreshS
                       {isCleared ? 'Cleared' : 'Pending'}
                     </Text>
                   </View>
-                </View>
+                </View> */}
               </TouchableOpacity>
             );
           })
@@ -1285,14 +1464,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  todayBadge: {
+  bookingBadge: {
     backgroundColor: THEME.colors.warningBg,
     borderRadius: 6,
     paddingHorizontal: 6,
     paddingVertical: 3,
     marginRight: 6,
   },
-  todayBadgeText: {
+  bookingBadgeText: {
     fontSize: 9,
     fontWeight: '800',
     color: THEME.colors.warning,
@@ -1350,21 +1529,27 @@ const styles = StyleSheet.create({
     marginRight: 6,
     marginBottom: 6,
   },
-  chipPending: {
+  chipYes: {
+    backgroundColor: THEME.colors.successBg,
+  },
+  chipNo: {
     backgroundColor: THEME.colors.dangerBg,
   },
-  chipDone: {
-    backgroundColor: THEME.colors.successBg,
+  chipNull: {
+    backgroundColor: THEME.colors.borderLight,
   },
   chipText: {
     fontSize: 9.5,
     fontWeight: '700',
   },
-  chipTextPending: {
+  chipTextYes: {
+    color: THEME.colors.success,
+  },
+  chipTextNo: {
     color: THEME.colors.danger,
   },
-  chipTextDone: {
-    color: THEME.colors.success,
+  chipTextNull: {
+    color: THEME.colors.textLight,
   },
   cardFooterRow: {
     flexDirection: 'row',
