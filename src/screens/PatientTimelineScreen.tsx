@@ -116,9 +116,13 @@ const formatTatEquation = (
   labelStart: string,
   labelEnd: string,
   timeStart: any,
-  timeEnd: any
+  timeEnd: any,
+  apiTat?: string | null
 ): string => {
-  const diffVal = calculateTat(timeStart, timeEnd);
+  let diffVal = calculateTat(timeStart, timeEnd);
+  if ((diffVal === '-' || diffVal.startsWith('-')) && apiTat && apiTat !== '-') {
+    diffVal = apiTat;
+  }
   const startStr = formatTimeOnly(timeStart);
   const endStr = formatTimeOnly(timeEnd);
   return `${labelEnd} (${endStr}) - ${labelStart} (${startStr}) = ${diffVal}`;
@@ -185,7 +189,7 @@ const getStageColorCode = (p: any, sIdx: number): number => {
     case 12: // T13: TPA Approved
       val = p.NewTATLastTPATAT ?? p.NewTATLastTPAApprTAT1 ?? p.LastTPATAT;
       break;
-    case 13: // T14: Final Billing Settlement
+    case 13: // T14: Last deposite
       val = p.NewTATLastStlmtDtTmTAT ?? p.LastStlmtDtTmTAT;
       break;
     case 14: // T15: Bed Vacant Time / Pt. Physically Left
@@ -868,7 +872,7 @@ export const PatientTimelineScreen = ({
               'Bill Sent to TPA',
               'Sent for Claim Approval',
               'TPA Approved',
-              'Final Billing Settlement',
+              'Last deposite',
               'Bed Vacant Time / Pt. Physically Left',
               'Bed Ready'
             ];
@@ -931,7 +935,7 @@ export const PatientTimelineScreen = ({
                   diffText = formatTatEquation('T7', 'T9', p.LastAcknIssDtTm, p.LastBillDtTm);
                   oldDiffText = formatTatEquation('T2', 'T9', p.DschgSumProvDtTm, p.LastBillDtTm);
                   break;
-                 case 9: // T10: Bill Handed Over to Relative
+                case 9: // T10: Bill Handed Over to Relative
                   {
                     const bhTime = p.NewBillHandOverDtTm || p.LastBillHandOverDtTm || p.BillHandoverDtTm;
                     timeStr = bhTime || '';
@@ -951,7 +955,7 @@ export const PatientTimelineScreen = ({
                   {
                     const caTime = p.NewClaimApprSentDtTm || p.ClaimApprSentDtTm || p.ClaimSentDtTm;
                     timeStr = caTime || '';
-                    diffText = formatTatEquation('T11', 'T12', p.LastTPAAplDtTm, caTime);
+                    diffText = formatTatEquation('T11', 'T12', p.LastTPAAplDtTm, caTime, p.NewClaimApprSentTAT || p.ClaimApprSentTAT);
                     oldDiffText = formatTatEquation('T1', 'T12', p.DschgAdvGivenTm, caTime);
                   }
                   break;
@@ -963,15 +967,21 @@ export const PatientTimelineScreen = ({
                     oldDiffText = formatTatEquation('T11', 'T13', p.LastTPAAplDtTm, p.LastTPAAprDtTm);
                   }
                   break;
-                case 13: // T14: Final Billing Settlement
-                  timeStr = p.LastStlmtDtTm || '';
-                  diffText = formatTatEquation('T13', 'T14', p.LastTPAAprDtTm, p.LastStlmtDtTm);
-                  oldDiffText = formatTatEquation('T13', 'T14', p.LastTPAAprDtTm, p.LastStlmtDtTm);
+                case 13: // T14: Last deposite
+                  {
+                    const lsdTime = p.NewLastStlmtDtTmTAT || p.LastStlmtDtTmTAT || p.NewLastStlmtDtTm || p.LastStlmtDtTm || '';
+                    timeStr = lsdTime;
+                    diffText = '-';
+                    oldDiffText = '-';
+                  }
                   break;
                 case 14: // T15: Bed Vacant Time / Pt. Physically Left
-                  timeStr = p.ActDschgDtTm || '';
-                  diffText = formatTatEquation('T14', 'T15', p.LastStlmtDtTm, p.ActDschgDtTm);
-                  oldDiffText = formatTatEquation('T13', 'T15', p.LastTPAAprDtTm, p.ActDschgDtTm);
+                  {
+                    const lsdTimePrev = p.NewLastStlmtDtTmTAT || p.LastStlmtDtTmTAT || p.NewLastStlmtDtTm || p.LastStlmtDtTm || '';
+                    timeStr = p.ActDschgDtTm || '';
+                    diffText = formatTatEquation('T14', 'T15', lsdTimePrev, p.ActDschgDtTm);
+                    oldDiffText = formatTatEquation('T13', 'T15', p.LastTPAAprDtTm, p.ActDschgDtTm);
+                  }
                   break;
                 case 15: // T16: Bed Ready
                   timeStr = p.BedReady || p.BedReadyDtTm || '';
@@ -1108,8 +1118,10 @@ export const PatientTimelineScreen = ({
 
   if (isLoading) {
     return (
-      <View style={[styles.container, styles.loadingContainer, { paddingTop: insets.top }]}>
-        <StatusBar barStyle="light-content" backgroundColor={THEME.colors.primary} translucent />
+      <View style={[styles.container, styles.loadingContainer]}>
+        <View style={{ backgroundColor: THEME.colors.primary, height: insets.top }}>
+          <StatusBar barStyle="light-content" backgroundColor={THEME.colors.primary} translucent />
+        </View>
         {/* Header Bar */}
         <View style={styles.header}>
           <TouchableOpacity 
@@ -1129,8 +1141,10 @@ export const PatientTimelineScreen = ({
   }
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <StatusBar barStyle="light-content" backgroundColor={THEME.colors.primary} translucent />
+    <View style={styles.container}>
+      <View style={{ backgroundColor: THEME.colors.primary, height: insets.top }}>
+        <StatusBar barStyle="light-content" backgroundColor={THEME.colors.primary} translucent />
+      </View>
 
       {/* Header Bar */}
       <View style={styles.header}>

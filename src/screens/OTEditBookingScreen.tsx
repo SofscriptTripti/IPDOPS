@@ -179,8 +179,10 @@ export const OTEditBookingScreen = ({ sessionData, booking, onBack, onSaved }: O
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <StatusBar barStyle="light-content" backgroundColor={THEME.colors.primary} translucent />
+    <View style={styles.container}>
+      <View style={{ backgroundColor: THEME.colors.primary, height: insets.top }}>
+        <StatusBar barStyle="light-content" backgroundColor={THEME.colors.primary} translucent />
+      </View>
 
       {/* Header — same style as Patient Discharge Timeline */}
       <View style={styles.header}>
