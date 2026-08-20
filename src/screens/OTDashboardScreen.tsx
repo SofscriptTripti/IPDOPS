@@ -14,10 +14,11 @@ import {
   Modal,
   Share,
   NativeModules,
+  PermissionsAndroid,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { THEME } from '../constants/theme';
-import { SearchIcon, CalendarIcon, UserIcon, MiniCheckIcon, MiniWarningIcon } from '../components/Icons';
+import { SearchIcon, CalendarIcon, UserIcon, MiniCheckIcon, MiniWarningIcon, ExitIcon } from '../components/Icons';
 import { UserSessionData } from '../services/authService';
 import { trackerService } from '../services/trackerService';
 import { LoadingIndicator } from '../components/LoadingIndicator';
@@ -26,6 +27,7 @@ interface OTDashboardScreenProps {
   sessionData: UserSessionData;
   onBack: () => void;
   onEditBooking: (item: OtCallRegisterItem) => void;
+  onLogout: () => void;
   refreshSignal?: number;
 }
 
@@ -63,6 +65,17 @@ export interface OtCallRegisterItem {
   estimate3: string | null;
   estimateRemark: string | null;
   clearance: string | null;
+  cbcDtTm?: string | null;
+  CreatDtTm?: string | null;
+  creatDtTm?: string | null;
+  'PT/INRCrTm'?: string | null;
+  ptInrDtTm?: string | null;
+  'VDRL/HIVDtTm'?: string | null;
+  vdrlHivDtTm?: string | null;
+  'X-RayDtTm'?: string | null;
+  xrayDtTm?: string | null;
+  '2DEchoDtTm'?: string | null;
+  echo2dDtTm?: string | null;
 }
 
 type StatusFilter = 'All' | 'Open' | 'Closed' | 'Cancelled';
@@ -100,28 +113,33 @@ const formatShortDate = (value: string | null): string => {
   return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}`;
 };
 
-const formatBookingDateTime = (value: string | null): string => {
-  const d = parseApiDate(value);
+const format12Hour = (time24: string | null | undefined): string => {
+  if (!time24) return '';
+  const parts = time24.split(':');
+  if (parts.length < 2) return time24;
+  let hours = parseInt(parts[0], 10);
+  const mins = parseInt(parts[1], 10);
+  if (isNaN(hours) || isNaN(mins)) return time24;
+  const ampm = hours >= 12 ? 'pm' : 'am';
+  hours = hours % 12;
+  hours = hours ? hours : 12;
+  const minStr = mins === 0 ? '' : `:${String(mins).padStart(2, '0')}`;
+  return `${hours}${minStr} ${ampm}`;
+};
+
+const formatBookingDateTimeWithSlots = (bookingDate: string | null, fromTime: string | null, toTime: string | null): string => {
+  const d = parseApiDate(bookingDate);
   if (!d) return '--';
   const pad = (n: number) => String(n).padStart(2, '0');
   const datePart = `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
-  if (value && value.includes('T')) {
-    const timePart = value.split('T')[1];
-    if (timePart && timePart !== '00:00:00') {
-      return `${datePart} ${timePart.substring(0, 5)}`;
-    }
-  }
-  return datePart;
+  
+  const fromStr = format12Hour(fromTime);
+  const toStr = format12Hour(toTime);
+  const timePart = (fromStr || toStr) ? ` , ${fromStr} - ${toStr}` : '';
+  return `${datePart}${timePart}`;
 };
 
-const isSameDay = (a: Date, b: Date) =>
-  a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 
-const isToday = (value: string | null): boolean => {
-  const d = parseApiDate(value);
-  if (!d) return false;
-  return isSameDay(d, new Date());
-};
 
 const formatYMD = (date: Date): string => {
   const pad = (n: number) => String(n).padStart(2, '0');
@@ -137,8 +155,13 @@ const daysInMonth = (year: number, month: number): number => new Date(year, mont
 const firstWeekdayOfMonth = (year: number, month: number): number => new Date(year, month, 1).getDay();
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-export const OTDashboardScreen = ({ sessionData, onBack, onEditBooking, refreshSignal }: OTDashboardScreenProps) => {
+export const OTDashboardScreen = ({ sessionData, onBack, onEditBooking, onLogout, refreshSignal }: OTDashboardScreenProps) => {
   const insets = useSafeAreaInsets();
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+
+  const handleLogout = () => {
+    setShowLogoutModal(true);
+  };
 
   const [records, setRecords] = useState<OtCallRegisterItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -150,7 +173,7 @@ export const OTDashboardScreen = ({ sessionData, onBack, onEditBooking, refreshS
   const [searchText, setSearchText] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('All');
-  const [clearanceFilter, setClearanceFilter] = useState<ClearanceFilter>('All');
+  const [clearanceFilter] = useState<ClearanceFilter>('All');
 
   const now = new Date();
   const calendarYear = now.getFullYear();
@@ -173,7 +196,7 @@ export const OTDashboardScreen = ({ sessionData, onBack, onEditBooking, refreshS
     const inThisMonth = (d: Date | null) => !!d && d.getFullYear() === calendarYear && d.getMonth() === calendarMonth;
     setTempStartDay(inThisMonth(from) ? from!.getDate() : null);
     setTempEndDay(inThisMonth(to) ? to!.getDate() : null);
-  }, [showCalendar]);
+  }, [showCalendar, fromDate, toDate, calendarYear, calendarMonth]);
 
   const handleCalendarDayPress = (day: number) => {
     if (tempStartDay === null || (tempStartDay !== null && tempEndDay !== null)) {
@@ -241,7 +264,7 @@ export const OTDashboardScreen = ({ sessionData, onBack, onEditBooking, refreshS
     if (refreshSignal === undefined) return;
     if (!hasLoadedOnceRef.current) return;
     fetchList(true);
-  }, [refreshSignal]);
+  }, [refreshSignal, fetchList]);
 
   const handleRefresh = () => {
     setIsRefreshing(true);
@@ -284,6 +307,25 @@ export const OTDashboardScreen = ({ sessionData, onBack, onEditBooking, refreshS
       return;
     }
 
+    // Request notification permission on Android 13+ before downloading
+    if (Platform.OS === 'android') {
+      try {
+        const hasPermission = await PermissionsAndroid.check(
+          PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS
+        );
+        if (!hasPermission) {
+          const status = await PermissionsAndroid.request(
+            PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS
+          );
+          if (status !== PermissionsAndroid.RESULTS.GRANTED) {
+            console.log('Notification permission denied by user');
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to check/request notification permission:', err);
+      }
+    }
+
     const rowsHtml = filteredRecords.map((r, idx) => {
       const actualDate = formatDMY(r.actualSurgeryDate);
       const timeStr = `${r.fromTime || '--:--'} - ${r.toTime || '--:--'}`;
@@ -298,40 +340,74 @@ export const OTDashboardScreen = ({ sessionData, onBack, onEditBooking, refreshS
       const valBloodThinner = (r.bloodThinner || '').trim().toUpperCase();
       const valFitness = (r.fitness || '').trim().toUpperCase();
 
+      const formatChecklistDateTime = (val: string | null | undefined): string => {
+        if (!val || val === '-') return '-';
+        const d = parseApiDate(val);
+        if (!d) return val;
+        const pad = (n: number) => String(n).padStart(2, '0');
+        const datePart = `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+        let hours = d.getHours();
+        const ampm = hours >= 12 ? 'PM' : 'AM';
+        hours = hours % 12;
+        hours = hours ? hours : 12;
+        const minPart = pad(d.getMinutes());
+        return `${datePart} , ${pad(hours)}:${minPart} ${ampm}`;
+      };
+
+      const dtCbc = formatChecklistDateTime(r.cbcDtTm);
+      const dtCreat = formatChecklistDateTime(r.creatDtTm || r.CreatDtTm);
+      const dtPtInr = formatChecklistDateTime(r.ptInrDtTm || r['PT/INRCrTm']);
+      const dtVdrlHiv = formatChecklistDateTime(r.vdrlHivDtTm || r['VDRL/HIVDtTm']);
+      const dtXray = formatChecklistDateTime(r.xrayDtTm || r['X-RayDtTm']);
+      const dtEcho2d = formatChecklistDateTime(r.echo2dDtTm || r['2DEchoDtTm']);
+
+      const getBookingDateTimeText = (): string => {
+        const text = formatBookingDateTimeWithSlots(r.otBookingDate, r.fromTime, r.toTime);
+        if (text === '--') return '--';
+        return `Booking date and time: ${text}`;
+      };
+
       const getValClass = (val: string) => {
         if (val === 'Y') return 'val-y';
         if (val === 'N') return 'val-n';
         return 'val-null';
       };
 
-      const getValText = (val: string, label: string) => {
-        if (val === 'Y') return `${label}: Y`;
-        if (val === 'N') return `${label}: N`;
-        return `${label}: —`;
+      const getValText = (val: string, label: string, dtTm?: string) => {
+        const base = val === 'Y' ? `${label}: Y` : val === 'N' ? `${label}: N` : `${label}: —`;
+        if (dtTm && dtTm !== '-') {
+          return `${base} (${dtTm})`;
+        }
+        return base;
       };
 
       return `
         <tr class="${idx % 2 === 0 ? 'even' : 'odd'}">
-          <td style="font-weight: bold; color: #0f172a;">${r.patientName || '--'}</td>
+          <td style="font-weight: bold; color: #0f172a;">
+            ${r.patientName || '--'}
+            ${r.ageSex ? `<br/><span style="font-size: 8.5px; font-weight: normal; color: #64748b;">(${r.ageSex})</span>` : ''}
+          </td>
           <td>${r.patientNo || '--'}</td>
           <td style="text-align: center;">${r.ward || '--'}</td>
           <td style="text-align: center;">${r.otName || '--'}</td>
           <td style="font-size: 11px; max-width: 150px; word-break: break-word;">${r.surgeryName || '--'}</td>
           <td style="font-size: 11px;">DR. ${r.surgeonDoctor || '--'}</td>
-          <td style="text-align: center;">${actualDate}<br/><span style="font-size: 9px; color: #64748b;">${timeStr}</span></td>
+          <td style="text-align: center; font-size: 10px; max-width: 150px; word-break: break-word;">
+            ${getBookingDateTimeText()}
+          </td>
           <td style="text-align: center;"><span class="badge status-${(r.status || 'OPEN').toLowerCase()}">${r.status || 'OPEN'}</span></td>
-          <td style="font-size: 10px;">
-            <div class="grid-checks">
-              <span class="chk ${getValClass(valCbc)}">${getValText(valCbc, 'CBC')}</span>
-              <span class="chk ${getValClass(valCreat)}">${getValText(valCreat, 'Creat')}</span>
-              <span class="chk ${getValClass(valPtInr)}">${getValText(valPtInr, 'PT/INR')}</span>
-              <span class="chk ${getValClass(valVdrlHiv)}">${getValText(valVdrlHiv, 'VDRL/HIV')}</span>
-              <span class="chk ${getValClass(valXray)}">${getValText(valXray, 'X-Ray')}</span>
-              <span class="chk ${getValClass(valEcho2d)}">${getValText(valEcho2d, '2D Echo')}</span>
-              <span class="chk ${getValClass(valMrsa)}">${getValText(valMrsa, 'MRSA')}</span>
-              <span class="chk ${getValClass(valBloodThinner)}">${getValText(valBloodThinner, 'Thinner')}</span>
-              <span class="chk ${getValClass(valFitness)}">${getValText(valFitness, 'Fitness')}</span>
-            </div>
+          <td style="font-size: 10px; padding: 4px 6px;">
+            <ul class="chk-list">
+              <li class="chk-item"><span class="chk ${getValClass(valCbc)}">${getValText(valCbc, 'CBC', dtCbc)}</span></li>
+              <li class="chk-item"><span class="chk ${getValClass(valCreat)}">${getValText(valCreat, 'Creat', dtCreat)}</span></li>
+              <li class="chk-item"><span class="chk ${getValClass(valPtInr)}">${getValText(valPtInr, 'PT/INR', dtPtInr)}</span></li>
+              <li class="chk-item"><span class="chk ${getValClass(valVdrlHiv)}">${getValText(valVdrlHiv, 'VDRL/HIV', dtVdrlHiv)}</span></li>
+              <li class="chk-item"><span class="chk ${getValClass(valXray)}">${getValText(valXray, 'X-Ray', dtXray)}</span></li>
+              <li class="chk-item"><span class="chk ${getValClass(valEcho2d)}">${getValText(valEcho2d, '2D Echo', dtEcho2d)}</span></li>
+              <li class="chk-item"><span class="chk ${getValClass(valMrsa)}">${getValText(valMrsa, 'MRSA')}</span></li>
+              <li class="chk-item"><span class="chk ${getValClass(valBloodThinner)}">${getValText(valBloodThinner, 'Thinner')}</span></li>
+              <li class="chk-item"><span class="chk ${getValClass(valFitness)}">${getValText(valFitness, 'Fitness')}</span></li>
+            </ul>
           </td>
         </tr>
       `;
@@ -367,6 +443,7 @@ export const OTDashboardScreen = ({ sessionData, onBack, onEditBooking, refreshS
             width: 100%;
             border-collapse: collapse;
             margin-top: 10px;
+            border: 1px solid #0b665c;
           }
           th {
             background-color: #0b665c;
@@ -375,11 +452,11 @@ export const OTDashboardScreen = ({ sessionData, onBack, onEditBooking, refreshS
             text-align: left;
             padding: 8px 6px;
             font-size: 11px;
-            border: 1px solid #084d45;
+            border: 1px solid #0b665c;
           }
           td {
             padding: 8px 6px;
-            border: 1px solid #e2e8f0;
+            border: 1px solid #0b665c;
             vertical-align: middle;
             font-size: 10.5px;
           }
@@ -405,18 +482,25 @@ export const OTDashboardScreen = ({ sessionData, onBack, onEditBooking, refreshS
             background-color: #fee2e2;
             color: #b91c1c;
           }
-          .grid-checks {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 2px;
+          .chk-list {
+            margin: 0;
+            padding: 0;
+            list-style: none;
+          }
+          .chk-item {
+            margin-bottom: 3px;
+          }
+          .chk-item:last-child {
+            margin-bottom: 0;
           }
           .chk {
-            display: inline-block;
+            display: block;
             font-size: 8.5px;
-            padding: 1px 3px;
-            border-radius: 2px;
+            padding: 2px 4px;
+            border-radius: 3px;
             text-align: center;
             font-weight: 600;
+            white-space: nowrap;
           }
           .val-y {
             background-color: #dcfce7;
@@ -432,7 +516,7 @@ export const OTDashboardScreen = ({ sessionData, onBack, onEditBooking, refreshS
           }
           @media print {
             body {
-              padding: 0;
+              padding: 15px;
             }
             thead {
               display: table-header-group;
@@ -508,8 +592,11 @@ export const OTDashboardScreen = ({ sessionData, onBack, onEditBooking, refreshS
         </View>
 
         <View style={styles.dashboardHeaderRight}>
-          <TouchableOpacity activeOpacity={0.7} style={styles.profileBadge} onPress={onBack}>
+          <TouchableOpacity activeOpacity={0.7} style={[styles.profileBadge, { marginRight: 10 }]} onPress={onBack}>
             <View style={styles.backArrow} />
+          </TouchableOpacity>
+          <TouchableOpacity activeOpacity={0.7} style={styles.profileBadge} onPress={handleLogout}>
+            <ExitIcon color="#ffffff" />
           </TouchableOpacity>
         </View>
       </View>
@@ -707,7 +794,7 @@ export const OTDashboardScreen = ({ sessionData, onBack, onEditBooking, refreshS
                 ? { bg: 'rgba(0, 123, 191, 0.12)', text: THEME.colors.secondary }
                 : { bg: 'rgba(100, 116, 139, 0.12)', text: THEME.colors.textMuted };
 
-            const isCleared = !!(item.clearance && item.clearance.trim());
+            // const isCleared = !!(item.clearance && item.clearance.trim());
 
             return (
               <TouchableOpacity
@@ -719,13 +806,6 @@ export const OTDashboardScreen = ({ sessionData, onBack, onEditBooking, refreshS
                 <View style={styles.cardTopRow}>
                   <Text style={styles.cardPatientName} numberOfLines={1}>{item.patientName || '--'}</Text>
                   <View style={styles.cardBadgesRow}>
-                    {item.otBookingDate && (
-                      <View style={styles.bookingBadge}>
-                        <Text style={styles.bookingBadgeText}>
-                          {formatBookingDateTime(item.otBookingDate)}
-                        </Text>
-                      </View>
-                    )}
                     <View style={[styles.statusBadge, { backgroundColor: statusColors.bg }]}>
                       <Text style={[styles.statusBadgeText, { color: statusColors.text }]}>{item.status || '--'}</Text>
                     </View>
@@ -739,11 +819,16 @@ export const OTDashboardScreen = ({ sessionData, onBack, onEditBooking, refreshS
 
                 <Text style={styles.cardSurgeryName}>{item.surgeryName || '--'}</Text>
 
+                {item.otBookingDate && (
+                  <Text style={styles.cardBookingLine}>
+                    Booking date & time: <Text style={styles.cardBookingLineActive}>{formatBookingDateTimeWithSlots(item.otBookingDate, item.fromTime, item.toTime)}</Text>
+                  </Text>
+                )}
+
                 <View style={styles.cardDoctorRow}>
                   <Text style={styles.cardDoctorText} numberOfLines={1}>
-                    DR. {item.surgeonDoctor || '--'} · {item.fromTime || '--:--'} – {item.toTime || '--:--'}
+                    DR. {item.surgeonDoctor || '--'}
                   </Text>
-                  <Text style={styles.cardDateText}>{formatShortDate(item.actualSurgeryDate)}</Text>
                 </View>
 
                 <View style={styles.chipsRow}>
@@ -943,6 +1028,41 @@ export const OTDashboardScreen = ({ sessionData, onBack, onEditBooking, refreshS
                   <Text style={styles.calendarApplyText}>Apply</Text>
                 </TouchableOpacity>
               </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Custom Themed Logout Confirmation Modal */}
+      <Modal
+        visible={showLogoutModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowLogoutModal(false)}
+      >
+        <View style={styles.logoutModalOverlay}>
+          <View style={styles.logoutModalContent}>
+            <Text style={styles.logoutModalText}>Are you sure you want to sign out?</Text>
+            
+            <View style={styles.logoutModalButtonsRow}>
+              <TouchableOpacity
+                activeOpacity={0.8}
+                style={[styles.logoutModalBtn, styles.logoutModalBtnCancel]}
+                onPress={() => setShowLogoutModal(false)}
+              >
+                <Text style={styles.logoutModalBtnCancelText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                activeOpacity={0.8}
+                style={[styles.logoutModalBtn, styles.logoutModalBtnConfirm]}
+                onPress={() => {
+                  setShowLogoutModal(false);
+                  onLogout();
+                }}
+              >
+                <Text style={styles.logoutModalBtnConfirmText}>Sign Out</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </View>
@@ -1499,6 +1619,15 @@ const styles = StyleSheet.create({
     color: THEME.colors.textDark,
     marginBottom: 6,
   },
+  cardBookingLine: {
+    fontSize: 11.5,
+    color: THEME.colors.textMedium,
+    marginBottom: 8,
+  },
+  cardBookingLineActive: {
+    color: THEME.colors.warning,
+    fontWeight: '800',
+  },
   cardDoctorRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1634,5 +1763,65 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: THEME.colors.primary,
     marginLeft: 8,
+  },
+  logoutModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  logoutModalContent: {
+    width: '100%',
+    maxWidth: 310,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    elevation: 6,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
+  },
+  logoutModalText: {
+    fontSize: 16.5,
+    fontWeight: '800',
+    color: THEME.colors.textDark,
+    textAlign: 'center',
+    lineHeight: 23,
+    marginBottom: 24,
+    marginTop: 8,
+  },
+  logoutModalButtonsRow: {
+    flexDirection: 'row',
+    width: '100%',
+    justifyContent: 'space-between',
+  },
+  logoutModalBtn: {
+    flex: 1,
+    height: 44,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  logoutModalBtnCancel: {
+    borderWidth: 1.5,
+    borderColor: '#cbd5e1',
+    marginRight: 8,
+  },
+  logoutModalBtnCancelText: {
+    color: THEME.colors.textMedium,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  logoutModalBtnConfirm: {
+    backgroundColor: THEME.colors.primary,
+    marginLeft: 8,
+  },
+  logoutModalBtnConfirmText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '700',
   },
 });

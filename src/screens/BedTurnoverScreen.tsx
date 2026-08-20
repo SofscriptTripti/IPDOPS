@@ -12,6 +12,7 @@ import {
   KeyboardAvoidingView,
   Modal,
   Keyboard,
+  Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { THEME } from '../constants/theme';
@@ -520,23 +521,29 @@ export const BedTurnoverScreen = ({ sessionData, onBack, visible, selectedSubMod
       >
 
       {/* Header bar */}
-      <View style={styles.header}>
-        <View style={styles.headerTop}>
-          <TouchableOpacity 
-            activeOpacity={0.7} 
-            style={styles.backBtn}
-            onPress={onBack}
-          >
-            <View style={styles.backArrow} />
+      <View style={styles.dashboardHeader}>
+        <View style={styles.dashboardHeaderLeft}>
+          <View style={styles.dashboardLogoOuter}>
+            <Image
+              source={require('../../assets/careworksone_logo.png')}
+              style={styles.dashboardLogo as any}
+              resizeMode="cover"
+            />
+          </View>
+          <View>
+            <Text style={styles.dashboardHospitalText} numberOfLines={1}>
+              IPD Ops · Bed Turnover
+            </Text>
+            <Text style={styles.dashboardTitleText} numberOfLines={1}>
+              {sessionData.companyName || '--'}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.dashboardHeaderRight}>
+          <TouchableOpacity activeOpacity={0.7} style={styles.profileBadge} onPress={onBack}>
+            <View style={[styles.backArrow, { marginLeft: 4 }]} />
           </TouchableOpacity>
-          <View style={styles.titleContainer}>
-            {/* <Text style={styles.headerSubtitle}>HOUSEKEEPING</Text> */}
-            <Text style={styles.headerTitle}>HouseKeeping Bed Turnover</Text>
-          </View>
-          <View style={styles.liveBadgeAbsolute}>
-            <View style={styles.liveDot} />
-            <Text style={styles.liveText}>Live</Text>
-          </View>
         </View>
       </View>
 
@@ -983,29 +990,62 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f6f8fb',
   },
-  header: {
+  dashboardHeader: {
     backgroundColor: THEME.colors.primary,
     paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 16,
+    paddingVertical: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     borderBottomLeftRadius: 16,
     borderBottomRightRadius: 16,
   },
-  headerTop: {
+  dashboardHeaderLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-    height: 40,
+    flex: 1,
+    paddingRight: 8,
   },
-  backBtn: {
-    position: 'absolute',
-    left: 0,
-    width: 32,
-    height: 32,
+  dashboardLogoOuter: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    backgroundColor: '#ffffff',
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex: 10,
+    marginRight: 12,
+    overflow: 'hidden',
+  },
+  dashboardLogo: {
+    width: '100%',
+    height: '100%',
+  },
+  dashboardHospitalText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: THEME.colors.primaryLight,
+    letterSpacing: 0.5,
+    paddingBottom: 5,
+  },
+  dashboardTitleText: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#ffffff',
+    marginTop: -2,
+  },
+  dashboardHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  profileBadge: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.25)',
   },
   backArrow: {
     width: 11,

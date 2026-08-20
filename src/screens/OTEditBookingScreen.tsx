@@ -11,12 +11,14 @@ import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
+  Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { THEME } from '../constants/theme';
 import { UserSessionData } from '../services/authService';
 import { trackerService } from '../services/trackerService';
 import { OtCallRegisterItem } from './OTDashboardScreen';
+import Icon from 'react-native-vector-icons/Ionicons';
 
 interface OTEditBookingScreenProps {
   sessionData: UserSessionData;
@@ -51,8 +53,30 @@ const formatDMY = (value: string | null): string => {
   const d = parseDate(value);
   if (!d) return '--';
   const pad = (n: number) => String(n).padStart(2, '0');
-  return `${pad(d.getDate())}-${pad(d.getMonth() + 1)}-${d.getFullYear()}`;
+  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
 };
+
+const formatDisplayDateTime = (value: string | null): string => {
+  if (!value) return 'Select Date & Time';
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return value;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const datePart = `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+  let hours = d.getHours();
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  hours = hours % 12;
+  hours = hours ? hours : 12;
+  const timePart = `${pad(hours)}:${pad(d.getMinutes())} ${ampm}`;
+  return `${datePart} , ${timePart}`;
+};
+
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+];
+
+const getDaysInMonth = (year: number, month: number) => new Date(year, month, 0).getDate();
+const getFirstDayOfMonth = (year: number, month: number) => new Date(year, month - 1, 1).getDay();
 
 const toYesNo = (value: string | null | undefined): YesNo => {
   if (!value) return null;
@@ -96,6 +120,19 @@ export const OTEditBookingScreen = ({ sessionData, booking, onBack, onSaved }: O
   const [cathlabAdvice, setCathlabAdvice] = useState('');
   const [remark, setRemark] = useState('');
   const [clinicalValues, setClinicalValues] = useState<Record<string, YesNo>>({});
+  const [clinicalDates, setClinicalDates] = useState<Record<string, string>>({});
+
+  const [selectedPickerField, setSelectedPickerField] = useState<string | null>(null);
+  const [pickerInitialValue, setPickerInitialValue] = useState<string>('');
+  const [showPickerModal, setShowPickerModal] = useState(false);
+  const [pickerStep, setPickerStep] = useState<'date' | 'time'>('date');
+
+  const [tempYear, setTempYear] = useState(new Date().getFullYear());
+  const [tempMonth, setTempMonth] = useState(new Date().getMonth() + 1);
+  const [tempDay, setTempDay] = useState(new Date().getDate());
+  const [tempHour, setTempHour] = useState(12);
+  const [tempMinute, setTempMinute] = useState(0);
+  const [tempAmPm, setTempAmPm] = useState<'AM' | 'PM'>('AM');
 
   const applyRecord = useCallback((r: OtCallRegisterItem) => {
     setRecord(r);
@@ -107,6 +144,16 @@ export const OTEditBookingScreen = ({ sessionData, booking, onBack, onSaved }: O
       values[f.key as string] = toYesNo(r[f.key] as string | null);
     });
     setClinicalValues(values);
+
+    const dates: Record<string, string> = {
+      cbc: r.cbcDtTm || '',
+      creat: r.creatDtTm || r.CreatDtTm || '',
+      ptInr: r.ptInrDtTm || r['PT/INRCrTm'] || '',
+      vdrlHiv: r.vdrlHivDtTm || r['VDRL/HIVDtTm'] || '',
+      xray: r.xrayDtTm || r['X-RayDtTm'] || '',
+      echo2d: r.echo2dDtTm || r['2DEchoDtTm'] || '',
+    };
+    setClinicalDates(dates);
   }, []);
 
   const fetchDetails = useCallback(async () => {
@@ -138,6 +185,65 @@ export const OTEditBookingScreen = ({ sessionData, booking, onBack, onSaved }: O
     fetchDetails();
   }, [fetchDetails]);
 
+  useEffect(() => {
+    if (showPickerModal) {
+      setPickerStep('date');
+      const initialDate = pickerInitialValue ? new Date(pickerInitialValue) : new Date();
+      if (!isNaN(initialDate.getTime())) {
+        setTempYear(initialDate.getFullYear());
+        setTempMonth(initialDate.getMonth() + 1);
+        setTempDay(initialDate.getDate());
+        
+        let hr = initialDate.getHours();
+        const ampm = hr >= 12 ? 'PM' : 'AM';
+        hr = hr % 12;
+        hr = hr ? hr : 12;
+        setTempHour(hr);
+        setTempMinute(initialDate.getMinutes());
+        setTempAmPm(ampm);
+      }
+    }
+  }, [showPickerModal, pickerInitialValue]);
+
+  const adjustMonth = (delta: number) => {
+    let nextMonth = tempMonth + delta;
+    let nextYear = tempYear;
+    if (nextMonth > 12) {
+      nextMonth = 1;
+      nextYear += 1;
+    } else if (nextMonth < 1) {
+      nextMonth = 12;
+      nextYear -= 1;
+    }
+    const maxDays = getDaysInMonth(nextYear, nextMonth);
+    const clampedDay = Math.min(tempDay, maxDays);
+    
+    setTempMonth(nextMonth);
+    setTempYear(nextYear);
+    setTempDay(clampedDay);
+  };
+
+  const adjustYear = (delta: number) => {
+    const nextYear = tempYear + delta;
+    const maxDays = getDaysInMonth(nextYear, tempMonth);
+    const clampedDay = Math.min(tempDay, maxDays);
+    
+    setTempYear(nextYear);
+    setTempDay(clampedDay);
+  };
+
+  const handleSaveDateTime = () => {
+    if (!selectedPickerField) return;
+    let militaryHour = tempHour % 12;
+    if (tempAmPm === 'PM') militaryHour += 12;
+    
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const isoStr = `${tempYear}-${pad(tempMonth)}-${pad(tempDay)}T${pad(militaryHour)}:${pad(tempMinute)}:00`;
+    
+    setClinicalDates(prev => ({ ...prev, [selectedPickerField]: isoStr }));
+    setShowPickerModal(false);
+  };
+
   const handleSave = async () => {
     if (!record) return;
     setIsSaving(true);
@@ -151,11 +257,17 @@ export const OTEditBookingScreen = ({ sessionData, booking, onBack, onSaved }: O
         cathlabAdvice: cathlabAdvice.trim() || null,
         status,
         cbc: clinicalValues.cbc,
+        cbcDtTm: clinicalDates.cbc?.trim() || null,
         creat: clinicalValues.creat,
+        creatDtTm: clinicalDates.creat?.trim() || null,
         ptInr: clinicalValues.ptInr,
+        ptInrDtTm: clinicalDates.ptInr?.trim() || null,
         vdrlHiv: clinicalValues.vdrlHiv,
+        vdrlHivDtTm: clinicalDates.vdrlHiv?.trim() || null,
         xray: clinicalValues.xray,
+        xrayDtTm: clinicalDates.xray?.trim() || null,
         echo2d: clinicalValues.echo2d,
+        echo2dDtTm: clinicalDates.echo2d?.trim() || null,
         mrsa: clinicalValues.mrsa,
         bloodThinner: clinicalValues.bloodThinner,
         fitness: clinicalValues.fitness,
@@ -365,35 +477,65 @@ export const OTEditBookingScreen = ({ sessionData, booking, onBack, onSaved }: O
                       return (
                         <View key={fieldKey} style={styles.fieldCell}>
                           <Text style={styles.fieldLabel}>{field.label}</Text>
-                          <TouchableOpacity
-                            activeOpacity={0.7}
-                            style={[
-                              styles.selectBox,
-                              value === 'Y' && styles.selectBoxYes,
-                              value === 'N' && styles.selectBoxNo,
-                            ]}
-                            onPress={() => setOpenClinicalField(isOpen ? null : fieldKey)}
-                          >
-                            <Text
+                          <View style={styles.controlsRow}>
+                            <TouchableOpacity
+                              activeOpacity={0.7}
                               style={[
-                                styles.selectBoxText,
-                                value === null && styles.selectBoxTextPlaceholder,
-                                value === 'Y' && styles.selectBoxTextYes,
-                                value === 'N' && styles.selectBoxTextNo,
+                                styles.selectBox,
+                                value === 'Y' && styles.selectBoxYes,
+                                value === 'N' && styles.selectBoxNo,
+                                ['cbc', 'creat', 'ptInr', 'vdrlHiv', 'xray', 'echo2d'].includes(fieldKey) ? { flex: 1, marginRight: 6 } : { flex: 1 },
                               ]}
+                              onPress={() => setOpenClinicalField(isOpen ? null : fieldKey)}
                             >
-                              {yesNoLabel(value)}
-                            </Text>
-                            <Text
-                              style={[
-                                styles.selectChevron,
-                                value === 'Y' && styles.selectBoxTextYes,
-                                value === 'N' && styles.selectBoxTextNo,
-                              ]}
-                            >
-                              {isOpen ? '▴' : '▾'}
-                            </Text>
-                          </TouchableOpacity>
+                              <Text
+                                numberOfLines={1}
+                                style={[
+                                  styles.selectBoxText,
+                                  value === null && styles.selectBoxTextPlaceholder,
+                                  value === 'Y' && styles.selectBoxTextYes,
+                                  value === 'N' && styles.selectBoxTextNo,
+                                ]}
+                              >
+                                {yesNoLabel(value)}
+                              </Text>
+                              <Text
+                                style={[
+                                  styles.selectChevron,
+                                  value === 'Y' && styles.selectBoxTextYes,
+                                  value === 'N' && styles.selectBoxTextNo,
+                                ]}
+                              >
+                                {isOpen ? '▴' : '▾'}
+                              </Text>
+                            </TouchableOpacity>
+
+                            {['cbc', 'creat', 'ptInr', 'vdrlHiv', 'xray', 'echo2d'].includes(fieldKey) && (
+                              <TouchableOpacity
+                                activeOpacity={0.7}
+                                style={[
+                                  styles.dateTimeSelectBox,
+                                  clinicalDates[fieldKey] ? styles.dateTimeSelectBoxActive : null,
+                                  { flex: 1 },
+                                ]}
+                                onPress={() => {
+                                  setSelectedPickerField(fieldKey);
+                                  setPickerInitialValue(clinicalDates[fieldKey] || '');
+                                  setShowPickerModal(true);
+                                }}
+                              >
+                                <Text
+                                  numberOfLines={1}
+                                  style={[
+                                    styles.dateTimeSelectBoxText,
+                                    clinicalDates[fieldKey] ? styles.dateTimeSelectBoxTextActive : null
+                                  ]}
+                                >
+                                  {clinicalDates[fieldKey] ? formatDisplayDateTime(clinicalDates[fieldKey]) : 'Select Date & Time'}
+                                </Text>
+                              </TouchableOpacity>
+                            )}
+                          </View>
                           {isOpen && (
                             <View style={styles.optionsBox}>
                               {YES_NO_OPTIONS.map(opt => {
@@ -508,6 +650,263 @@ export const OTEditBookingScreen = ({ sessionData, booking, onBack, onSaved }: O
         </View>
       </KeyboardAvoidingView>
       )}
+      {/* DateTime Picker Modal */}
+      <Modal
+        visible={showPickerModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowPickerModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.pickerContainer}>
+            {/* Modal Header with close & back navigation */}
+            <View style={styles.modalHeaderRow}>
+              <Text style={styles.pickerHeader}>
+                {pickerStep === 'date' ? 'Select Date' : 'Select Time'}
+              </Text>
+              <View style={styles.modalHeaderActions}>
+                {pickerStep === 'time' && (
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    style={styles.backToCalBtn}
+                    onPress={() => setPickerStep('date')}
+                  >
+                    <Icon name="calendar-outline" size={22} color={THEME.colors.primary} />
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  style={styles.closeModalBtn}
+                  onPress={() => setShowPickerModal(false)}
+                >
+                  <Text style={styles.closeModalBtnText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {pickerStep === 'date' ? (
+              <>
+                {/* Year & Month select row */}
+                <View style={styles.pickerNavRow}>
+                  {/* Month navigation */}
+                  <View style={styles.navBlock}>
+                    <TouchableOpacity
+                      activeOpacity={0.7}
+                      style={styles.navBtnArrow}
+                      onPress={() => adjustMonth(-1)}
+                    >
+                      <Text style={styles.navBtnArrowText}>◀</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.navLabelText}>
+                      {MONTH_NAMES[tempMonth - 1]}
+                    </Text>
+                    <TouchableOpacity
+                      activeOpacity={0.7}
+                      style={styles.navBtnArrow}
+                      onPress={() => adjustMonth(1)}
+                    >
+                      <Text style={styles.navBtnArrowText}>▶</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Year navigation */}
+                  <View style={styles.navBlock}>
+                    <TouchableOpacity
+                      activeOpacity={0.7}
+                      style={styles.navBtnArrow}
+                      onPress={() => adjustYear(-1)}
+                    >
+                      <Text style={styles.navBtnArrowText}>◀</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.navLabelText}>{tempYear}</Text>
+                    <TouchableOpacity
+                      activeOpacity={0.7}
+                      style={styles.navBtnArrow}
+                      onPress={() => adjustYear(1)}
+                    >
+                      <Text style={styles.navBtnArrowText}>▶</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* Calendar grid */}
+                <View style={styles.calendarGrid}>
+                  {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(w => (
+                    <View key={w} style={styles.calendarHeaderCell}>
+                      <Text style={styles.calendarHeaderCellText}>{w}</Text>
+                    </View>
+                  ))}
+                  {(() => {
+                    const totalDays = getDaysInMonth(tempYear, tempMonth);
+                    const firstDayIndex = getFirstDayOfMonth(tempYear, tempMonth);
+                    const dayItems = [];
+                    for (let i = 0; i < firstDayIndex; i++) {
+                      dayItems.push({ isDummy: true, key: `dummy-${i}` });
+                    }
+                    for (let d = 1; d <= totalDays; d++) {
+                      dayItems.push({ isDummy: false, day: d, key: `day-${d}` });
+                    }
+                    return dayItems.map(item => {
+                      if (item.isDummy) {
+                        return <View key={item.key} style={styles.calendarDayCellDummy} />;
+                      }
+                      const isSelected = tempDay === item.day;
+                      return (
+                        <TouchableOpacity
+                          key={item.key}
+                          activeOpacity={0.7}
+                          style={[styles.calendarDayCell, isSelected && styles.calendarDayCellSelected]}
+                          onPress={() => {
+                            setTempDay(item.day!);
+                            setPickerStep('time');
+                          }}
+                        >
+                          <Text style={[styles.calendarDayCellText, isSelected && styles.calendarDayCellTextSelected]}>
+                            {item.day}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    });
+                  })()}
+                </View>
+
+                {/* Date actions */}
+                <View style={styles.pickerActionsRow}>
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    style={[styles.pickerActionBtn, styles.pickerActionBtnClear]}
+                    onPress={() => {
+                      if (selectedPickerField) {
+                        setClinicalDates(prev => ({ ...prev, [selectedPickerField]: '' }));
+                      }
+                      setShowPickerModal(false);
+                    }}
+                  >
+                    <Text style={styles.pickerActionBtnTextClear}>Clear</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    style={[styles.pickerActionBtn, styles.pickerActionBtnSave]}
+                    onPress={() => setPickerStep('time')}
+                  >
+                    <Text style={styles.pickerActionBtnTextSave}>Next</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            ) : (
+              <>
+                {/* Time section */}
+                <View style={styles.timeSectionContainer}>
+                  <View style={styles.timeSelectorsRow}>
+                    {/* Hours */}
+                    <View style={styles.timeColumn}>
+                      <TouchableOpacity
+                        activeOpacity={0.7}
+                        style={styles.timeArrowBtn}
+                        onPress={() => {
+                          let nextHr = tempHour + 1;
+                          if (nextHr > 12) nextHr = 1;
+                          setTempHour(nextHr);
+                        }}
+                      >
+                        <Text style={styles.timeArrowText}>▲</Text>
+                      </TouchableOpacity>
+                      <View style={styles.timeValueBox}>
+                        <Text style={styles.timeValueText}>{String(tempHour).padStart(2, '0')}</Text>
+                      </View>
+                      <TouchableOpacity
+                        activeOpacity={0.7}
+                        style={styles.timeArrowBtn}
+                        onPress={() => {
+                          let nextHr = tempHour - 1;
+                          if (nextHr < 1) nextHr = 12;
+                          setTempHour(nextHr);
+                        }}
+                      >
+                        <Text style={styles.timeArrowText}>▼</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    <Text style={styles.timeColon}>:</Text>
+
+                    {/* Minutes */}
+                    <View style={styles.timeColumn}>
+                      <TouchableOpacity
+                        activeOpacity={0.7}
+                        style={styles.timeArrowBtn}
+                        onPress={() => {
+                          let nextMin = tempMinute + 1;
+                          if (nextMin > 59) nextMin = 0;
+                          setTempMinute(nextMin);
+                        }}
+                      >
+                        <Text style={styles.timeArrowText}>▲</Text>
+                      </TouchableOpacity>
+                      <View style={styles.timeValueBox}>
+                        <Text style={styles.timeValueText}>{String(tempMinute).padStart(2, '0')}</Text>
+                      </View>
+                      <TouchableOpacity
+                        activeOpacity={0.7}
+                        style={styles.timeArrowBtn}
+                        onPress={() => {
+                          let nextMin = tempMinute - 1;
+                          if (nextMin < 0) nextMin = 59;
+                          setTempMinute(nextMin);
+                        }}
+                      >
+                        <Text style={styles.timeArrowText}>▼</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* AM/PM */}
+                    <View style={styles.ampmContainer}>
+                      <TouchableOpacity
+                        activeOpacity={0.7}
+                        style={[styles.ampmBtn, tempAmPm === 'AM' && styles.ampmBtnActive]}
+                        onPress={() => setTempAmPm('AM')}
+                      >
+                        <Text style={[styles.ampmBtnText, tempAmPm === 'AM' && styles.ampmBtnTextActive]}>AM</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        activeOpacity={0.7}
+                        style={[styles.ampmBtn, tempAmPm === 'PM' && styles.ampmBtnActive]}
+                        onPress={() => setTempAmPm('PM')}
+                      >
+                        <Text style={[styles.ampmBtnText, tempAmPm === 'PM' && styles.ampmBtnTextActive]}>PM</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Time actions */}
+                <View style={styles.pickerActionsRow}>
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    style={[styles.pickerActionBtn, styles.pickerActionBtnClear]}
+                    onPress={() => {
+                      if (selectedPickerField) {
+                        setClinicalDates(prev => ({ ...prev, [selectedPickerField]: '' }));
+                      }
+                      setShowPickerModal(false);
+                    }}
+                  >
+                    <Text style={styles.pickerActionBtnTextClear}>Clear</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    style={[styles.pickerActionBtn, styles.pickerActionBtnSave]}
+                    onPress={handleSaveDateTime}
+                  >
+                    <Text style={styles.pickerActionBtnTextSave}>Set</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -875,5 +1274,276 @@ const styles = StyleSheet.create({
     color: THEME.colors.textMedium,
     fontSize: 15,
     fontWeight: '800',
+  },
+  controlsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+  },
+  dateTimeSelectBox: {
+    flex: 1,
+    height: 38,
+    borderWidth: 1.5,
+    borderColor: '#cbd5e1',
+    borderRadius: 8,
+    backgroundColor: '#f8fafc',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+  },
+  dateTimeSelectBoxActive: {
+    borderColor: 'rgba(34, 197, 94, 0.3)',
+    backgroundColor: THEME.colors.successBg,
+  },
+  dateTimeSelectBoxText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: THEME.colors.textMedium,
+  },
+  dateTimeSelectBoxTextActive: {
+    color: THEME.colors.success,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  pickerContainer: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    width: '100%',
+    maxWidth: 320,
+    padding: 16,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 12,
+      },
+      android: { elevation: 8 },
+    }),
+  },
+  modalHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+    width: '100%',
+  },
+  pickerHeader: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: THEME.colors.textDark,
+  },
+  modalHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  backToCalBtn: {
+    marginRight: 14,
+    padding: 4,
+  },
+  backToCalBtnText: {
+    fontSize: 18,
+  },
+  closeModalBtn: {
+    padding: 4,
+  },
+  closeModalBtnText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: THEME.colors.textLight,
+  },
+  pickerNavRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  navBlock: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f1f5f9',
+    borderRadius: 8,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    flex: 0.48,
+    justifyContent: 'space-between',
+  },
+  navBtnArrow: {
+    padding: 6,
+  },
+  navBtnArrowText: {
+    fontSize: 11,
+    color: THEME.colors.primary,
+  },
+  navLabelText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: THEME.colors.textDark,
+  },
+  calendarGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: 12,
+  },
+  calendarHeaderCell: {
+    width: `${100 / 7}%`,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 4,
+  },
+  calendarHeaderCellText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: THEME.colors.textMuted,
+  },
+  calendarDayCell: {
+    width: `${100 / 7}%`,
+    height: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 6,
+    marginVertical: 1,
+  },
+  calendarDayCellDummy: {
+    width: `${100 / 7}%`,
+    height: 34,
+  },
+  calendarDayCellSelected: {
+    backgroundColor: THEME.colors.primary,
+  },
+  calendarDayCellText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: THEME.colors.textDark,
+  },
+  calendarDayCellTextSelected: {
+    color: '#ffffff',
+    fontWeight: '800',
+  },
+  timeSectionContainer: {
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+    paddingTop: 10,
+    marginBottom: 16,
+  },
+  timeSectionTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: THEME.colors.textDark,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  timeSelectorsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timeColumn: {
+    alignItems: 'center',
+    width: 44,
+  },
+  timeArrowBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  timeArrowText: {
+    fontSize: 12,
+    color: THEME.colors.primary,
+  },
+  timeValueBox: {
+    backgroundColor: '#f1f5f9',
+    borderRadius: 6,
+    width: 36,
+    height: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+  },
+  timeValueText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: THEME.colors.textDark,
+  },
+  timeColon: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: THEME.colors.textDark,
+    marginHorizontal: 8,
+  },
+  ampmContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#f1f5f9',
+    borderRadius: 8,
+    padding: 3,
+    marginLeft: 16,
+  },
+  ampmBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  ampmBtnActive: {
+    backgroundColor: '#ffffff',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+      },
+      android: { elevation: 2 },
+    }),
+  },
+  ampmBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: THEME.colors.textMedium,
+  },
+  ampmBtnTextActive: {
+    color: THEME.colors.primary,
+    fontWeight: '800',
+  },
+  pickerActionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  pickerActionBtn: {
+    flex: 1,
+    height: 38,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginHorizontal: 4,
+  },
+  pickerActionBtnCancel: {
+    borderWidth: 1.5,
+    borderColor: '#cbd5e1',
+  },
+  pickerActionBtnClear: {
+    borderWidth: 1.5,
+    borderColor: THEME.colors.danger,
+  },
+  pickerActionBtnSave: {
+    backgroundColor: THEME.colors.primary,
+  },
+  pickerActionBtnTextCancel: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: THEME.colors.textMedium,
+  },
+  pickerActionBtnTextClear: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: THEME.colors.danger,
+  },
+  pickerActionBtnTextSave: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#ffffff',
   },
 });

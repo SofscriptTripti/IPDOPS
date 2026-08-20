@@ -241,6 +241,7 @@ const formatDateTimeWithAmPm = (timeStr: any): string => {
       if (!datePart || !timePart) return timeStr;
       const dateSubparts = datePart.split('-');
       if (dateSubparts.length === 3) {
+        const year = dateSubparts[0];
         const month = dateSubparts[1];
         const day = dateSubparts[2];
         if (!month || !day || timePart.length < 5) return timeStr;
@@ -250,7 +251,7 @@ const formatDateTimeWithAmPm = (timeStr: any): string => {
         const ampm = hrs >= 12 ? 'PM' : 'AM';
         const displayHrs = hrs % 12 === 0 ? 12 : hrs % 12;
         const formattedHrs = String(displayHrs).padStart(2, '0');
-        return `${day}/${month} ${formattedHrs}:${mins} ${ampm}`;
+        return `${day}/${month}/${year} , ${formattedHrs}:${mins} ${ampm}`;
       } else {
         if (timePart.length < 5) return timeStr;
         const hrs = parseInt(timePart.substring(0, 2), 10);

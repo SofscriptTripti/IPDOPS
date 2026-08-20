@@ -440,16 +440,14 @@ export const DashboardScreen = ({
             <ActivityIndicator color="#ffffff" size="small" style={{ marginRight: 10 }} />
           ) : (
             <>
-              {/* Notification Bell
+              {/* Back button */}
               <TouchableOpacity 
                 activeOpacity={0.7} 
-                style={styles.headerIconBtn}
-                onPress={onNavigateToNotifications}
+                style={[styles.profileBadge, { marginRight: 10 }]} 
+                onPress={onBackToSubModuleSelection}
               >
-                <BellIcon color="#ffffff" />
-                <View style={styles.notificationDot} />
+                <View style={[styles.backArrow, { marginLeft: 4 }]} />
               </TouchableOpacity>
-              */}
               
               {/* Profile Logout Icon Badge */}
               <TouchableOpacity 
@@ -1950,5 +1948,13 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: THEME.colors.primary,
     marginLeft: 8,
+  },
+  backArrow: {
+    width: 11,
+    height: 11,
+    borderLeftWidth: 2.5,
+    borderBottomWidth: 2.5,
+    borderColor: '#ffffff',
+    transform: [{ rotate: '45deg' }],
   },
 });

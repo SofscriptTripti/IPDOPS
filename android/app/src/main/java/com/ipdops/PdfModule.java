@@ -79,7 +79,7 @@ public class PdfModule extends ReactContextBaseJavaModule {
                             } else {
                                 File downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
                                 File file = new File(downloadsDir, fileName);
-                                pdfUri = Uri.fromFile(file);
+                                pdfUri = androidx.core.content.FileProvider.getUriForFile(reactContext, reactContext.getPackageName() + ".provider", file);
                                 pfd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_WRITE | ParcelFileDescriptor.MODE_CREATE | ParcelFileDescriptor.MODE_TRUNCATE);
                             }
 
@@ -141,7 +141,7 @@ public class PdfModule extends ReactContextBaseJavaModule {
         PendingIntent pendingIntent = PendingIntent.getActivity(
                 context,
                 0,
-                Intent.createChooser(intent, "Open PDF"),
+                intent,
                 flags
         );
 

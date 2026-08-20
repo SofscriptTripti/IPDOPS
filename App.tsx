@@ -326,6 +326,7 @@ export default function App() {
                 sessionData={sessionData}
                 onBack={handleBackToSubModuleSelection}
                 onEditBooking={handleEditOtBooking}
+                onLogout={handleLogout}
                 refreshSignal={otDashboardRefreshKey}
               />
             </View>

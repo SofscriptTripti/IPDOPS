@@ -1089,11 +1089,17 @@ export const trackerService = {
       cathlabAdvice: string | null;
       status: string;
       cbc: string | null;
+      cbcDtTm?: string | null;
       creat: string | null;
+      creatDtTm?: string | null;
       ptInr: string | null;
+      ptInrDtTm?: string | null;
       vdrlHiv: string | null;
+      vdrlHivDtTm?: string | null;
       xray: string | null;
+      xrayDtTm?: string | null;
       echo2d: string | null;
+      echo2dDtTm?: string | null;
       mrsa: string | null;
       bloodThinner: string | null;
       fitness: string | null;
