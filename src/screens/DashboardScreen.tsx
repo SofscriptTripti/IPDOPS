@@ -408,8 +408,10 @@ export const DashboardScreen = ({
   const outOfTatCount = liveCounts?.totOutOfTat !== undefined ? liveCounts.totOutOfTat : '--';
 
   return (
-    <View style={[styles.dashboardContainer, { paddingTop: insets.top }]}>
-      <StatusBar barStyle="light-content" backgroundColor={THEME.colors.primary} translucent />
+    <View style={styles.dashboardContainer}>
+      <View style={{ backgroundColor: THEME.colors.primary, height: insets.top }}>
+        <StatusBar barStyle="light-content" backgroundColor={THEME.colors.primary} translucent />
+      </View>
       
       {/* Dashboard Header Bar */}
       <View style={styles.dashboardHeader}>

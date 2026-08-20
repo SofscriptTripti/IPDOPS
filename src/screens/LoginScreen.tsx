@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
+  StatusBar,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { THEME } from '../constants/theme';
@@ -102,6 +103,9 @@ export const LoginScreen = ({ onLoginSuccess }: LoginScreenProps) => {
 
   return (
     <View style={styles.container}>
+      <View style={{ backgroundColor: THEME.colors.primary, height: insets.top }}>
+        <StatusBar barStyle="light-content" backgroundColor={THEME.colors.primary} translucent />
+      </View>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
@@ -117,7 +121,7 @@ export const LoginScreen = ({ onLoginSuccess }: LoginScreenProps) => {
           keyboardShouldPersistTaps="handled"
         >
           {/* Header Section (Full Width, Curved Bottom) */}
-          <View style={[styles.tealHeader, { paddingTop: insets.top + 32 }]}>
+          <View style={[styles.tealHeader, { paddingTop: 32 }]}>
             <View style={styles.logoOuterContainer}>
               <Image
                 source={require('../../assets/careworksone_logo.png')}

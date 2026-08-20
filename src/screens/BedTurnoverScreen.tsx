@@ -512,8 +512,10 @@ export const BedTurnoverScreen = ({ sessionData, onBack, visible, selectedSubMod
   }
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <StatusBar barStyle="light-content" backgroundColor={THEME.colors.primary} translucent />
+    <View style={styles.container}>
+      <View style={{ backgroundColor: THEME.colors.primary, height: insets.top }}>
+        <StatusBar barStyle="light-content" backgroundColor={THEME.colors.primary} translucent />
+      </View>
 
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}

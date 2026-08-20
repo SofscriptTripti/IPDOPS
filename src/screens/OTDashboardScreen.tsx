@@ -568,8 +568,10 @@ export const OTDashboardScreen = ({ sessionData, onBack, onEditBooking, onLogout
   }
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <StatusBar barStyle="light-content" backgroundColor={THEME.colors.primary} translucent />
+    <View style={styles.container}>
+      <View style={{ backgroundColor: THEME.colors.primary, height: insets.top }}>
+        <StatusBar barStyle="light-content" backgroundColor={THEME.colors.primary} translucent />
+      </View>
 
       {/* Header — same UI as the main Dashboard header */}
       <View style={styles.dashboardHeader}>

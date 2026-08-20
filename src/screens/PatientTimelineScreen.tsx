@@ -1097,8 +1097,10 @@ export const PatientTimelineScreen = ({
 
   if (isLoading) {
     return (
-      <View style={[styles.container, styles.loadingContainer, { paddingTop: insets.top }]}>
-        <StatusBar barStyle="light-content" backgroundColor={THEME.colors.primary} translucent />
+      <View style={[styles.container, styles.loadingContainer]}>
+        <View style={{ backgroundColor: THEME.colors.primary, height: insets.top }}>
+          <StatusBar barStyle="light-content" backgroundColor={THEME.colors.primary} translucent />
+        </View>
         {/* Header Bar */}
         <View style={styles.header}>
           <TouchableOpacity 
@@ -1118,8 +1120,10 @@ export const PatientTimelineScreen = ({
   }
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <StatusBar barStyle="light-content" backgroundColor={THEME.colors.primary} translucent />
+    <View style={styles.container}>
+      <View style={{ backgroundColor: THEME.colors.primary, height: insets.top }}>
+        <StatusBar barStyle="light-content" backgroundColor={THEME.colors.primary} translucent />
+      </View>
 
       {/* Header Bar */}
       <View style={styles.header}>

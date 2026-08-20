@@ -296,8 +296,10 @@ export const SubModuleSelectionScreen = ({
   const hospitalName = sessionData.companyName || 'BETHANY HOSPITAL';
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <StatusBar barStyle="light-content" backgroundColor={THEME.colors.primary} translucent />
+    <View style={styles.container}>
+      <View style={{ backgroundColor: THEME.colors.primary, height: insets.top }}>
+        <StatusBar barStyle="light-content" backgroundColor={THEME.colors.primary} translucent />
+      </View>
       
       {/* 1. SOLID HEADER SECTION */}
       <View style={styles.header}>
