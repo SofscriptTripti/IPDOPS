@@ -931,25 +931,37 @@ export const PatientTimelineScreen = ({
                   diffText = formatTatEquation('T7', 'T9', p.LastAcknIssDtTm, p.LastBillDtTm);
                   oldDiffText = formatTatEquation('T2', 'T9', p.DschgSumProvDtTm, p.LastBillDtTm);
                   break;
-                case 9: // T10: Bill Handed Over to Relative
-                  timeStr = p.LastBillHandOverDtTm || p.BillHandoverDtTm || '';
-                  diffText = formatTatEquation('T9', 'T10', p.LastBillDtTm, p.LastBillHandOverDtTm || p.BillHandoverDtTm);
-                  oldDiffText = formatTatEquation('T1', 'T10', p.DschgAdvGivenTm, p.LastBillHandOverDtTm || p.BillHandoverDtTm);
+                 case 9: // T10: Bill Handed Over to Relative
+                  {
+                    const bhTime = p.NewBillHandOverDtTm || p.LastBillHandOverDtTm || p.BillHandoverDtTm;
+                    timeStr = bhTime || '';
+                    diffText = formatTatEquation('T9', 'T10', p.LastBillDtTm, bhTime);
+                    oldDiffText = formatTatEquation('T1', 'T10', p.DschgAdvGivenTm, bhTime);
+                  }
                   break;
                 case 10: // T11: Bill Sent to TPA
-                  timeStr = p.LastTPAAplDtTm || '';
-                  diffText = formatTatEquation('T10', 'T11', p.LastBillHandOverDtTm || p.BillHandoverDtTm, p.LastTPAAplDtTm);
-                  oldDiffText = formatTatEquation('T1', 'T11', p.DschgAdvGivenTm, p.LastTPAAplDtTm);
+                  {
+                    const bhTimePrev = p.NewBillHandOverDtTm || p.LastBillHandOverDtTm || p.BillHandoverDtTm;
+                    timeStr = p.LastTPAAplDtTm || '';
+                    diffText = formatTatEquation('T10', 'T11', bhTimePrev, p.LastTPAAplDtTm);
+                    oldDiffText = formatTatEquation('T1', 'T11', p.DschgAdvGivenTm, p.LastTPAAplDtTm);
+                  }
                   break;
                 case 11: // T12: Sent for Claim Approval
-                  timeStr = p.ClaimApprSentDtTm || p.ClaimSentDtTm || '';
-                  diffText = formatTatEquation('T11', 'T12', p.LastTPAAplDtTm, p.ClaimApprSentDtTm || p.ClaimSentDtTm);
-                  oldDiffText = formatTatEquation('T1', 'T12', p.DschgAdvGivenTm, p.ClaimApprSentDtTm || p.ClaimSentDtTm);
+                  {
+                    const caTime = p.NewClaimApprSentDtTm || p.ClaimApprSentDtTm || p.ClaimSentDtTm;
+                    timeStr = caTime || '';
+                    diffText = formatTatEquation('T11', 'T12', p.LastTPAAplDtTm, caTime);
+                    oldDiffText = formatTatEquation('T1', 'T12', p.DschgAdvGivenTm, caTime);
+                  }
                   break;
                 case 12: // T13: TPA Approved
-                  timeStr = p.LastTPAAprDtTm || '';
-                  diffText = formatTatEquation('T12', 'T13', p.ClaimApprSentDtTm || p.ClaimSentDtTm, p.LastTPAAprDtTm);
-                  oldDiffText = formatTatEquation('T11', 'T13', p.LastTPAAplDtTm, p.LastTPAAprDtTm);
+                  {
+                    const caTimePrev = p.NewClaimApprSentDtTm || p.ClaimApprSentDtTm || p.ClaimSentDtTm;
+                    timeStr = p.LastTPAAprDtTm || '';
+                    diffText = formatTatEquation('T12', 'T13', caTimePrev, p.LastTPAAprDtTm);
+                    oldDiffText = formatTatEquation('T11', 'T13', p.LastTPAAplDtTm, p.LastTPAAprDtTm);
+                  }
                   break;
                 case 13: // T14: Final Billing Settlement
                   timeStr = p.LastStlmtDtTm || '';

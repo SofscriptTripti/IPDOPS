@@ -384,11 +384,11 @@ export const DashboardScreen = ({
       patient.status === selectedTab ||
       (selectedTab === 'Out of TAT' && (patient.status === 'Out of TAT' || patient.statusDetail === 'Delay'));
     const matchesSearch =
-      patient.name.toLowerCase().includes(activeSearchQuery.toLowerCase()) ||
-      patient.ipNo.toLowerCase().includes(activeSearchQuery.toLowerCase()) ||
-      patient.bed.toLowerCase().includes(activeSearchQuery.toLowerCase()) ||
-      patient.speciality.toLowerCase().includes(activeSearchQuery.toLowerCase()) ||
-      patient.doctor.toLowerCase().includes(activeSearchQuery.toLowerCase());
+      (patient.name || '').toLowerCase().includes(activeSearchQuery.toLowerCase()) ||
+      (patient.ipNo || '').toLowerCase().includes(activeSearchQuery.toLowerCase()) ||
+      (patient.bed || '').toLowerCase().includes(activeSearchQuery.toLowerCase()) ||
+      (patient.speciality || '').toLowerCase().includes(activeSearchQuery.toLowerCase()) ||
+      (patient.doctor || '').toLowerCase().includes(activeSearchQuery.toLowerCase());
       
     let matchesDate = true;
     const pDate = getPatientDate(patient.dateRange);
@@ -643,7 +643,10 @@ export const DashboardScreen = ({
               placeholder="Search IP no. or name"
               placeholderTextColor={THEME.colors.textMuted}
               value={searchText}
-              onChangeText={setSearchText}
+              onChangeText={(text) => {
+                setSearchText(text);
+                setActiveSearchQuery(text);
+              }}
               onSubmitEditing={() => {
                 Keyboard.dismiss();
                 setActiveSearchQuery(searchText);
