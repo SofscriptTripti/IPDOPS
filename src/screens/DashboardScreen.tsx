@@ -213,7 +213,7 @@ export const DashboardScreen = ({
             let stageTime = '';
             if (sIdx === 0) stageTime = p.DschgAdvGivenTm ? p.DschgAdvGivenTm.substring(11, 16) : '';
             else if (sIdx === 14) stageTime = p.ActDschgDtTm ? p.ActDschgDtTm.substring(11, 16) : '';
-            else if (sIdx === 15) stageTime = p.BedReadyDtTm ? p.BedReadyDtTm.substring(11, 16) : '';
+            else if (sIdx === 15) stageTime = (p.BedReady || p.BedReadyDtTm) ? (p.BedReady || p.BedReadyDtTm).substring(11, 16) : '';
 
             return {
               code: `T${sIdx + 1}`,

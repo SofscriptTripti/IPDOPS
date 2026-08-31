@@ -190,7 +190,7 @@ const getStageColorCode = (p: any, sIdx: number): number => {
       val = p.NewTATLastTPATAT ?? p.NewTATLastTPAApprTAT1 ?? p.LastTPATAT;
       break;
     case 13: // T14: Last deposite
-      val = p.NewTATLastStlmtDtTmTAT ?? p.LastStlmtDtTmTAT;
+      val = p.TATLastDepositDtTmTAT ?? p.NewTATLastStlmtDtTmTAT ?? p.LastStlmtDtTmTAT;
       break;
     case 14: // T15: Bed Vacant Time / Pt. Physically Left
       val = p.NewTATDischargeTAT ?? p.TATDischargeTAT ?? p.TATLastPatienTAT ?? p.NewTATLastPatienTAT;
@@ -955,7 +955,7 @@ export const PatientTimelineScreen = ({
                   {
                     const caTime = p.NewClaimApprSentDtTm || p.ClaimApprSentDtTm || p.ClaimSentDtTm;
                     timeStr = caTime || '';
-                    diffText = formatTatEquation('T11', 'T12', p.LastTPAAplDtTm, caTime, p.NewClaimApprSentTAT || p.ClaimApprSentTAT);
+                    diffText = formatTatEquation('T11', 'T12', p.LastTPAAplDtTm, caTime, p.NewClaimApprSentTAT || p.NewTATClaimApprSentTAT || p.ClaimApprSentTAT);
                     oldDiffText = formatTatEquation('T1', 'T12', p.DschgAdvGivenTm, caTime);
                   }
                   break;
@@ -963,29 +963,30 @@ export const PatientTimelineScreen = ({
                   {
                     const caTimePrev = p.NewClaimApprSentDtTm || p.ClaimApprSentDtTm || p.ClaimSentDtTm;
                     timeStr = p.LastTPAAprDtTm || '';
-                    diffText = formatTatEquation('T12', 'T13', caTimePrev, p.LastTPAAprDtTm);
+                    diffText = formatTatEquation('T12', 'T13', caTimePrev, p.LastTPAAprDtTm, p.NewLastTPATAT || p.NewTATLastTPATAT || p.LastTPATAT);
                     oldDiffText = formatTatEquation('T11', 'T13', p.LastTPAAplDtTm, p.LastTPAAprDtTm);
                   }
                   break;
                 case 13: // T14: Last deposite
                   {
-                    const lsdTime = p.NewLastStlmtDtTmTAT || p.LastStlmtDtTmTAT || p.NewLastStlmtDtTm || p.LastStlmtDtTm || '';
+                    const lsdTime = p.NewLastStlmtDtTm || p.LastDepositDtTm || p.NewLastDepositDtTm || p.NewLastStlmtDtTmTAT || p.LastStlmtDtTmTAT || p.LastStlmtDtTm || '';
                     timeStr = lsdTime;
-                    diffText = '-';
-                    oldDiffText = '-';
+                    diffText = formatTatEquation('T13', 'T14', p.LastTPAAprDtTm, lsdTime, p.NewLastDepositDtTmTAT || p.NewLastStlmtDtTmTAT || p.NewTATLastStlmtDtTmTAT || p.LastStlmtDtTmTAT);
+                    const caTimePrev = p.NewClaimApprSentDtTm || p.ClaimApprSentDtTm || p.ClaimSentDtTm;
+                    oldDiffText = formatTatEquation('T12', 'T14', caTimePrev, lsdTime);
                   }
                   break;
                 case 14: // T15: Bed Vacant Time / Pt. Physically Left
                   {
-                    const lsdTimePrev = p.NewLastStlmtDtTmTAT || p.LastStlmtDtTmTAT || p.NewLastStlmtDtTm || p.LastStlmtDtTm || '';
+                    const lsdTimePrev = p.NewLastStlmtDtTm || p.LastDepositDtTm || p.NewLastDepositDtTm || p.NewLastStlmtDtTmTAT || p.LastStlmtDtTmTAT || p.LastStlmtDtTm || '';
                     timeStr = p.ActDschgDtTm || '';
-                    diffText = formatTatEquation('T14', 'T15', lsdTimePrev, p.ActDschgDtTm);
+                    diffText = formatTatEquation('T14', 'T15', lsdTimePrev, p.ActDschgDtTm, p.NewDischargeTAT || p.TATDischargeTAT);
                     oldDiffText = formatTatEquation('T13', 'T15', p.LastTPAAprDtTm, p.ActDschgDtTm);
                   }
                   break;
                 case 15: // T16: Bed Ready
                   timeStr = p.BedReady || p.BedReadyDtTm || '';
-                  diffText = formatTatEquation('T15', 'T16', p.ActDschgDtTm, p.BedReady || p.BedReadyDtTm);
+                  diffText = formatTatEquation('T15', 'T16', p.ActDschgDtTm, p.BedReady || p.BedReadyDtTm, p.NewLastBedReadyTAT || p.NewTATLastBedReadyTAT || p.LastBedReadyTAT);
                   oldDiffText = formatTatEquation('T15', 'T16', p.ActDschgDtTm, p.BedReady || p.BedReadyDtTm);
                   break;
               }
