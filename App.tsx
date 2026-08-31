@@ -328,6 +328,7 @@ export default function App() {
                 onEditBooking={handleEditOtBooking}
                 onLogout={handleLogout}
                 refreshSignal={otDashboardRefreshKey}
+                visible={currentScreen === 'OTDashboard'}
               />
             </View>
           )}

@@ -112,14 +112,12 @@ export const BedTurnoverScreen = ({ sessionData, onBack, visible, selectedSubMod
         : '10:45 AM';
       pendingText = `Cleaned Today at ${cleanTime}`;
     } else {
-      const daysDiff = Math.floor(item?.datehourdiff || 0);
-      const hoursDiff = Math.round(((item?.datehourdiff || 0) - daysDiff) * 24);
-      if (daysDiff > 0) {
-        pendingText = `Pending ${daysDiff} Day${daysDiff !== 1 ? 's' : ''} ${hoursDiff} hour${hoursDiff !== 1 ? 's' : ''}`;
-      } else {
-        pendingText = `Pending ${hoursDiff} hour${hoursDiff !== 1 ? 's' : ''}`;
-      }
-    }
+      const totalMinutes = Math.round((item?.datehourdiff || 0) * 24 * 60);
+      const days = Math.floor(totalMinutes / (24 * 60));
+      const hours = Math.floor((totalMinutes % (24 * 60)) / 60);
+      const minutes = totalMinutes % 60;
+      
+      pendingText = `Pending ${days} Day ${hours} Hr ${minutes} Min`;}
 
     return {
       id,

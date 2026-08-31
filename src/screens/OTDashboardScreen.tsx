@@ -22,6 +22,7 @@ import { SearchIcon, CalendarIcon, UserIcon, MiniCheckIcon, MiniWarningIcon, Exi
 import { UserSessionData } from '../services/authService';
 import { trackerService } from '../services/trackerService';
 import { LoadingIndicator } from '../components/LoadingIndicator';
+import { signalRService } from '../services/signalrService';
 
 interface OTDashboardScreenProps {
   sessionData: UserSessionData;
@@ -29,6 +30,7 @@ interface OTDashboardScreenProps {
   onEditBooking: (item: OtCallRegisterItem) => void;
   onLogout: () => void;
   refreshSignal?: number;
+  visible?: boolean;
 }
 
 export interface OtCallRegisterItem {
@@ -40,6 +42,7 @@ export interface OtCallRegisterItem {
   patientName: string | null;
   ageSex: string | null;
   patientNo: string | null;
+  ipNo?: number | string | null;
   fromTime: string | null;
   toTime: string | null;
   surgeonDoctor: string | null;
@@ -76,6 +79,7 @@ export interface OtCallRegisterItem {
   xrayDtTm?: string | null;
   '2DEchoDtTm'?: string | null;
   echo2dDtTm?: string | null;
+  tpaApprovedAmount?: string | number | null;
 }
 
 type StatusFilter = 'All' | 'Open' | 'Closed' | 'Cancelled';
@@ -155,7 +159,7 @@ const daysInMonth = (year: number, month: number): number => new Date(year, mont
 const firstWeekdayOfMonth = (year: number, month: number): number => new Date(year, month, 1).getDay();
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-export const OTDashboardScreen = ({ sessionData, onBack, onEditBooking, onLogout, refreshSignal }: OTDashboardScreenProps) => {
+export const OTDashboardScreen = ({ sessionData, onBack, onEditBooking, onLogout, refreshSignal, visible }: OTDashboardScreenProps) => {
   const insets = useSafeAreaInsets();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
@@ -166,8 +170,8 @@ export const OTDashboardScreen = ({ sessionData, onBack, onEditBooking, onLogout
   const [records, setRecords] = useState<OtCallRegisterItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isFetching, setIsFetching] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [signalrConnected, setSignalrConnected] = useState(false);
   const hasLoadedOnceRef = useRef(false);
 
   const [searchText, setSearchText] = useState('');
@@ -251,13 +255,14 @@ export const OTDashboardScreen = ({ sessionData, onBack, onEditBooking, onLogout
       hasLoadedOnceRef.current = true;
       setIsLoading(false);
       setIsFetching(false);
-      setIsRefreshing(false);
     }
   }, [sessionData, fromDate, toDate, statusFilter, selectedOt, debouncedSearch]);
 
   useEffect(() => {
-    fetchList(false);
-  }, [fetchList]);
+    if (visible !== false) {
+      fetchList(false);
+    }
+  }, [fetchList, visible]);
 
   // Re-fetch silently after coming back from an edit save (App.tsx bumps refreshSignal).
   useEffect(() => {
@@ -266,10 +271,116 @@ export const OTDashboardScreen = ({ sessionData, onBack, onEditBooking, onLogout
     fetchList(true);
   }, [refreshSignal, fetchList]);
 
-  const handleRefresh = () => {
-    setIsRefreshing(true);
-    fetchList(true);
-  };
+  // Fallback periodic polling to ensure data is always fresh (fail-safe for SignalR broadcasts)
+  useEffect(() => {
+    if (visible === false) return;
+    const interval = setInterval(() => {
+      console.log('[OT Dashboard] Fallback polling: re-fetching bookings...');
+      fetchList(true); // background silent refresh
+    }, 15000); // 15 seconds poll
+    return () => clearInterval(interval);
+  }, [fetchList, visible]);
+
+  // Poll SignalR connection status to update indicator dot
+  useEffect(() => {
+    if (visible === false) return;
+    setSignalrConnected(signalRService.isConnected);
+    const timer = setInterval(() => {
+      setSignalrConnected(signalRService.isConnected);
+    }, 2000);
+    return () => clearInterval(timer);
+  }, [visible]);
+
+  // Connect to SignalR for real-time list updates/auto-refresh
+  useEffect(() => {
+    if (visible === false) return;
+
+    const handleSignalRRefresh = () => {
+      console.log('NewDataalert>>> (Refresh Signal Received)');
+      fetchList(true); // background silent refresh
+    };
+
+    const handleMessageReceived = (data: any) => {
+      console.log('NewDataalert>>>', data);
+      if (!data) return;
+
+      const bookingItem = data.booking || data.item || data;
+      const bookingId = bookingItem.id || bookingItem.Id;
+
+      if (bookingId) {
+        const mappedItem: OtCallRegisterItem = {
+          id: Number(bookingId),
+          otBookingDate: bookingItem.otBookingDate ?? bookingItem.OtBookingDate ?? null,
+          actualSurgeryDate: bookingItem.actualSurgeryDate ?? bookingItem.ActualSurgeryDate ?? null,
+          otName: bookingItem.otName ?? bookingItem.OtName ?? null,
+          surgeryName: bookingItem.surgeryName ?? bookingItem.SurgeryName ?? null,
+          patientName: bookingItem.patientName ?? bookingItem.PatientName ?? null,
+          ageSex: bookingItem.ageSex ?? bookingItem.AgeSex ?? null,
+          patientNo: bookingItem.patientNo ?? bookingItem.PatientNo ?? null,
+          ipNo: bookingItem.ipNo ?? bookingItem.IpNo ?? null,
+          fromTime: bookingItem.fromTime ?? bookingItem.FromTime ?? null,
+          toTime: bookingItem.toTime ?? bookingItem.ToTime ?? null,
+          surgeonDoctor: bookingItem.surgeonDoctor ?? bookingItem.SurgeonDoctor ?? null,
+          robotic: bookingItem.robotic ?? bookingItem.Robotic ?? null,
+          admissionDate: bookingItem.admissionDate ?? bookingItem.AdmissionDate ?? null,
+          ward: bookingItem.ward ?? bookingItem.Ward ?? null,
+          tpaSelf: bookingItem.tpaSelf ?? bookingItem.TpaSelf ?? null,
+          rescheduleDate: bookingItem.rescheduleDate ?? bookingItem.RescheduleDate ?? null,
+          cathlabAdvice: bookingItem.cathlabAdvice ?? bookingItem.CathlabAdvice ?? null,
+          status: bookingItem.status ?? bookingItem.Status ?? 'OPEN',
+          cbc: bookingItem.cbc ?? bookingItem.Cbc ?? null,
+          creat: bookingItem.creat ?? bookingItem.Creat ?? null,
+          ptInr: bookingItem.ptInr ?? bookingItem.PtInr ?? null,
+          vdrlHiv: bookingItem.vdrlHiv ?? bookingItem.VdrlHiv ?? null,
+          xray: bookingItem.xray ?? bookingItem.Xray ?? null,
+          echo2d: bookingItem.echo2d ?? bookingItem.Echo2d ?? null,
+          mrsa: bookingItem.mrsa ?? bookingItem.Mrsa ?? null,
+          bloodThinner: bookingItem.bloodThinner ?? bookingItem.BloodThinner ?? null,
+          fitness: bookingItem.fitness ?? bookingItem.Fitness ?? null,
+          remark: bookingItem.remark ?? bookingItem.Remark ?? null,
+          estimate1: bookingItem.estimate1 ?? bookingItem.Estimate1 ?? null,
+          estimate2: bookingItem.estimate2 ?? bookingItem.Estimate2 ?? null,
+          estimate3: bookingItem.estimate3 ?? bookingItem.Estimate3 ?? null,
+          estimateRemark: bookingItem.estimateRemark ?? bookingItem.EstimateRemark ?? null,
+          clearance: bookingItem.clearance ?? bookingItem.Clearance ?? null,
+          tpaApprovedAmount: bookingItem.tpaApprovedAmount ?? bookingItem.TpaApprovedAmount ?? null,
+          cbcDtTm: bookingItem.cbcDtTm ?? bookingItem.CbcDtTm ?? null,
+          creatDtTm: bookingItem.creatDtTm ?? bookingItem.CreatDtTm ?? null,
+          ptInrDtTm: bookingItem.ptInrDtTm ?? bookingItem.PtInrDtTm ?? null,
+          vdrlHivDtTm: bookingItem.vdrlHivDtTm ?? bookingItem.VdrlHivDtTm ?? null,
+          xrayDtTm: bookingItem.xrayDtTm ?? bookingItem.XrayDtTm ?? null,
+          echo2dDtTm: bookingItem.echo2dDtTm ?? bookingItem.Echo2dDtTm ?? null,
+        };
+
+        setRecords(prev => {
+          const exists = prev.some(r => r.id === mappedItem.id);
+          if (exists) {
+            return prev.map(r => r.id === mappedItem.id ? { ...r, ...mappedItem } : r);
+          } else {
+            return [mappedItem, ...prev];
+          }
+        });
+      }
+
+      fetchList(true); // background silent refresh
+    };
+
+    console.log('[SignalR] OT Dashboard connecting to SignalR chat hub...');
+    signalRService.startConnection(sessionData.token, sessionData.userId)
+      .then(() => {
+        console.log('[SignalR] Connected successfully on OT Dashboard.');
+      })
+      .catch(err => console.warn('[SignalR] Failed to start connection on OT Dashboard mount:', err));
+
+    signalRService.subscribeToRefresh(handleSignalRRefresh);
+    signalRService.subscribeToReceiveMessage(handleMessageReceived);
+
+    return () => {
+      signalRService.unsubscribeFromRefresh(handleSignalRRefresh);
+      signalRService.unsubscribeFromReceiveMessage(handleMessageReceived);
+      signalRService.stopConnection().catch(err => console.warn('[SignalR] Failed to stop connection on OT Dashboard unmount:', err));
+    };
+  }, [fetchList, sessionData, visible]);
 
   const otOptions = useMemo(() => {
     const set = new Set<string>();
@@ -584,9 +695,20 @@ export const OTDashboardScreen = ({ sessionData, onBack, onEditBooking, onLogout
             />
           </View>
           <View>
-            <Text style={styles.dashboardHospitalText} numberOfLines={1}>
-              IPD Ops · OT Call Register
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Text style={styles.dashboardHospitalText} numberOfLines={1}>
+                IPD Ops · OT Call Register
+              </Text>
+              <View 
+                style={{ 
+                  width: 7, 
+                  height: 7, 
+                  borderRadius: 3.5, 
+                  backgroundColor: signalrConnected ? '#22c55e' : '#ef4444', 
+                  marginLeft: 6 
+                }} 
+              />
+            </View>
             <Text style={styles.dashboardTitleText} numberOfLines={1}>
               {sessionData.companyName || '--'}
             </Text>
@@ -609,14 +731,6 @@ export const OTDashboardScreen = ({ sessionData, onBack, onEditBooking, onLogout
         showsVerticalScrollIndicator={false}
         bounces={true}
         alwaysBounceVertical={true}
-        refreshControl={
-          <RefreshControl
-            refreshing={isRefreshing}
-            onRefresh={handleRefresh}
-            colors={[THEME.colors.primary]}
-            tintColor={THEME.colors.primary}
-          />
-        }
         keyboardShouldPersistTaps="handled"
       >
         {/* Stat cards — same compact card style as the main Dashboard's metric row */}
@@ -815,7 +929,7 @@ export const OTDashboardScreen = ({ sessionData, onBack, onEditBooking, onLogout
                 </View>
 
                 <Text style={styles.cardMetaLine} numberOfLines={1}>
-                  No: {item.patientNo || '--'} · Ward: {item.ward || '--'} · OT {item.otName || '--'}
+                  <Text style={styles.cardBookingLine}>Patient No: </Text><Text style={styles.cardBookingLineActive}>{item.patientNo || '--'}</Text> · <Text style={styles.cardBookingLine}>IP No: </Text><Text style={styles.cardBookingLineActive}>{item.ipNo || '--'}</Text> · Ward: {item.ward || '--'} · OT {item.otName || '--'}
                   {item.ageSex ? ` · ${item.ageSex}` : ''}
                 </Text>
 

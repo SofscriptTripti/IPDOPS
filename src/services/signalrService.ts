@@ -133,7 +133,11 @@ class SignalRService {
         'receiveChat',
         'MessageReceived',
         'messageReceived',
-        'onMessageReceived'
+        'onMessageReceived',
+        'ReceiveOTBooking',
+        'receiveOTBooking',
+        'OTBookingReceived',
+        'otBookingReceived'
       ];
 
       for (const method of listenMethods) {
@@ -177,7 +181,10 @@ class SignalRService {
         'message', 'Message', 'chat', 'Chat', 'Refresh', 'refresh', 'UpdateChat', 'updateChat',
         'MessageEdited', 'messageEdited', 'MessageUpdated', 'messageUpdated',
         'MessageDeleted', 'messageDeleted', 'ChatMessageEdited', 'chatMessageEdited',
-        'ChatMessageDeleted', 'chatMessageDeleted', 'ThreadUpdated', 'threadUpdated'
+        'ChatMessageDeleted', 'chatMessageDeleted', 'ThreadUpdated', 'threadUpdated',
+        'RefreshOT', 'refreshOT', 'OTRefresh', 'otRefresh', 'OTBookingAdded', 'otBookingAdded',
+        'OTBookingUpdated', 'otBookingUpdated', 'RefreshBooking', 'refreshBooking',
+        'OTRegisterUpdated', 'otRegisterUpdated', 'RefreshOTDashboard', 'refreshOTDashboard'
       ];
       // NOTE: intentionally NOT listening for MessageSeen/MessageRead/etc. here.
       // The backend broadcasts those right after this client's own chatMarkRead call;

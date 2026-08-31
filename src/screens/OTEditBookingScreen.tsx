@@ -329,8 +329,19 @@ export const OTEditBookingScreen = ({ sessionData, booking, onBack, onSaved }: O
           {/* Patient banner — replaces showing name/IP in the header bar */}
           <View style={styles.patientBanner}>
             <Text style={styles.patientBannerName} numberOfLines={1}>{record.patientName || '--'}</Text>
-            <View style={styles.patientBannerIpBadge}>
-              <Text style={styles.patientBannerIpText}>{record.patientNo || '--'}</Text>
+            <View style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
+              <View style={[styles.patientBannerIpBadge, { marginBottom: 4 }]}>
+                <Text style={styles.patientBannerIpText}>
+                  <Text style={{ color: '#000000' }}>Patient No: </Text>
+                  {record.patientNo || '--'}
+                </Text>
+              </View>
+              <View style={styles.patientBannerIpBadge}>
+                <Text style={styles.patientBannerIpText}>
+                  <Text style={{ color: '#000000' }}>IP No: </Text>
+                  {record.ipNo || '--'}
+                </Text>
+              </View>
             </View>
           </View>
 
@@ -398,7 +409,9 @@ export const OTEditBookingScreen = ({ sessionData, booking, onBack, onSaved }: O
 
               <View style={styles.fieldRowPlain}>
                 <View style={styles.fieldCell}>
-                  <Text style={styles.fieldLabel}>Actual Surgery Date</Text>
+                  <Text style={styles.fieldLabel}>
+                    {record.rescheduleDate ? 'Planned Surgery Date' : 'Actual Surgery Date'}
+                  </Text>
                   <FieldValue value={record.actualSurgeryDate ? formatDMY(record.actualSurgeryDate) : null} />
                 </View>
                 <View style={styles.fieldCell}>
@@ -621,6 +634,16 @@ export const OTEditBookingScreen = ({ sessionData, booking, onBack, onSaved }: O
                   <FieldValue value={record.clearance} />
                 </View>
               </View>
+
+              {record.tpaSelf && String(record.tpaSelf).toUpperCase() === 'TPA' && (
+                <View style={styles.fieldRowPlain}>
+                  <View style={styles.fieldCell}>
+                    <Text style={styles.fieldLabel}>TPA Approved Amount</Text>
+                    <FieldValue value={record.tpaApprovedAmount !== null && record.tpaApprovedAmount !== undefined ? String(record.tpaApprovedAmount) : null} />
+                  </View>
+                  <View style={styles.fieldCell} />
+                </View>
+              )}
 
               <View style={[styles.fieldRowPlain, styles.fieldRowLastPlain]}>
                 <View style={styles.fieldCellFull}>
@@ -1165,10 +1188,7 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   patientBannerIpBadge: {
-    backgroundColor: THEME.colors.primaryBg,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingVertical: 2,
   },
   patientBannerIpText: {
     fontSize: 12.5,
