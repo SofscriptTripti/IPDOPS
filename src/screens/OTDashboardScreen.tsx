@@ -15,6 +15,7 @@ import {
   Share,
   NativeModules,
   PermissionsAndroid,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { THEME } from '../constants/theme';
@@ -82,6 +83,12 @@ export interface OtCallRegisterItem {
   tpaApprovedAmount?: string | number | null;
 }
 
+export interface OtMstItem {
+  Cd: number;
+  Dcd: string;
+  Sts: string;
+}
+
 type StatusFilter = 'All' | 'Open' | 'Closed' | 'Cancelled';
 type ClearanceFilter = 'All' | 'Done' | 'NotDone' | 'Blank';
 
@@ -99,6 +106,20 @@ const CHECKLIST_ITEMS: { key: keyof OtCallRegisterItem; label: string }[] = [
 
 const parseApiDate = (value: string | null): Date | null => {
   if (!value) return null;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (trimmed.includes('-')) {
+      const parts = trimmed.split('T')[0].split('-');
+      if (parts.length === 3) {
+        const y = parseInt(parts[0], 10);
+        const m = parseInt(parts[1], 10) - 1;
+        const d = parseInt(parts[2], 10);
+        if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
+          return new Date(y, m, d);
+        }
+      }
+    }
+  }
   const d = new Date(value);
   return isNaN(d.getTime()) ? null : d;
 };
@@ -180,27 +201,65 @@ export const OTDashboardScreen = ({ sessionData, onBack, onEditBooking, onLogout
   const [clearanceFilter] = useState<ClearanceFilter>('All');
 
   const now = new Date();
-  const calendarYear = now.getFullYear();
-  const calendarMonth = now.getMonth();
-  const [fromDate, setFromDate] = useState(formatYMD(new Date(calendarYear, calendarMonth, 1)));
-  const [toDate, setToDate] = useState(formatYMD(new Date(calendarYear, calendarMonth + 1, 0)));
+  const todayYMD = formatYMD(now);
+  const [fromDate, setFromDate] = useState(todayYMD);
+  const [toDate, setToDate] = useState(todayYMD);
+
+  const [calendarYear, setCalendarYear] = useState<number>(now.getFullYear());
+  const [calendarMonth, setCalendarMonth] = useState<number>(now.getMonth());
+  const [showMonthYearPicker, setShowMonthYearPicker] = useState(false);
 
   const [selectedOt, setSelectedOt] = useState<string | null>(null);
+  const [otMasterList, setOtMasterList] = useState<OtMstItem[]>([]);
   const [showOtModal, setShowOtModal] = useState(false);
 
   // Single calendar range picker (From + To in one place), same pattern as the main Dashboard.
   const [showCalendar, setShowCalendar] = useState(false);
-  const [tempStartDay, setTempStartDay] = useState<number | null>(1);
-  const [tempEndDay, setTempEndDay] = useState<number | null>(daysInMonth(calendarYear, calendarMonth));
+  const [tempStartDay, setTempStartDay] = useState<number | null>(now.getDate());
+  const [tempEndDay, setTempEndDay] = useState<number | null>(now.getDate());
 
   useEffect(() => {
     if (!showCalendar) return;
+    setShowMonthYearPicker(false);
     const from = parseApiDate(fromDate);
     const to = parseApiDate(toDate);
-    const inThisMonth = (d: Date | null) => !!d && d.getFullYear() === calendarYear && d.getMonth() === calendarMonth;
-    setTempStartDay(inThisMonth(from) ? from!.getDate() : null);
-    setTempEndDay(inThisMonth(to) ? to!.getDate() : null);
-  }, [showCalendar, fromDate, toDate, calendarYear, calendarMonth]);
+    if (from) {
+      setCalendarYear(from.getFullYear());
+      setCalendarMonth(from.getMonth());
+      setTempStartDay(from.getDate());
+    } else {
+      setCalendarYear(now.getFullYear());
+      setCalendarMonth(now.getMonth());
+      setTempStartDay(now.getDate());
+    }
+    if (to && from && to.getMonth() === from.getMonth() && to.getFullYear() === from.getFullYear()) {
+      setTempEndDay(to.getDate());
+    } else {
+      setTempEndDay(from ? from.getDate() : now.getDate());
+    }
+  }, [showCalendar]);
+
+  const handlePrevMonth = () => {
+    if (calendarMonth === 0) {
+      setCalendarMonth(11);
+      setCalendarYear(prev => prev - 1);
+    } else {
+      setCalendarMonth(prev => prev - 1);
+    }
+    setTempStartDay(null);
+    setTempEndDay(null);
+  };
+
+  const handleNextMonth = () => {
+    if (calendarMonth === 11) {
+      setCalendarMonth(0);
+      setCalendarYear(prev => prev + 1);
+    } else {
+      setCalendarMonth(prev => prev + 1);
+    }
+    setTempStartDay(null);
+    setTempEndDay(null);
+  };
 
   const handleCalendarDayPress = (day: number) => {
     if (tempStartDay === null || (tempStartDay !== null && tempEndDay !== null)) {
@@ -237,7 +296,7 @@ export const OTDashboardScreen = ({ sessionData, onBack, onEditBooking, onLogout
         userId: sessionData.userId,
         fromDate,
         toDate,
-        status: mapStatusToApi(statusFilter),
+        status: 'ALL',
         otName: selectedOt || null,
         search: debouncedSearch || null,
       });
@@ -256,7 +315,7 @@ export const OTDashboardScreen = ({ sessionData, onBack, onEditBooking, onLogout
       setIsLoading(false);
       setIsFetching(false);
     }
-  }, [sessionData, fromDate, toDate, statusFilter, selectedOt, debouncedSearch]);
+  }, [sessionData, fromDate, toDate, selectedOt, debouncedSearch]);
 
   useEffect(() => {
     if (visible !== false) {
@@ -277,7 +336,7 @@ export const OTDashboardScreen = ({ sessionData, onBack, onEditBooking, onLogout
     const interval = setInterval(() => {
       console.log('[OT Dashboard] Fallback polling: re-fetching bookings...');
       fetchList(true); // background silent refresh
-    }, 15000); // 15 seconds poll
+    }, 5000); // 5 seconds poll
     return () => clearInterval(interval);
   }, [fetchList, visible]);
 
@@ -382,13 +441,27 @@ export const OTDashboardScreen = ({ sessionData, onBack, onEditBooking, onLogout
     };
   }, [fetchList, sessionData, visible]);
 
-  const otOptions = useMemo(() => {
-    const set = new Set<string>();
-    records.forEach(r => {
-      if (r.otName && r.otName.trim()) set.add(r.otName.trim());
-    });
-    return Array.from(set).sort();
-  }, [records]);
+  // Fetch OT Master list for the Select OT dropdown filter
+  useEffect(() => {
+    if (visible === false) return;
+    const fetchOtMst = async () => {
+      try {
+        const res = await trackerService.getOtMstList(sessionData.token, {
+          cocd: sessionData.coCd ? String(sessionData.coCd).padStart(2, '0') : '01',
+          div: sessionData.div || 1,
+          loc: sessionData.loc || 1,
+          userId: sessionData.userId || 'ADMIN',
+        });
+        if (res && res.success && Array.isArray(res.data)) {
+          const activeList = res.data.filter((item: OtMstItem) => !item.Sts || item.Sts === 'A');
+          setOtMasterList(activeList);
+        }
+      } catch (err) {
+        console.warn('Failed to load OT Master list:', err);
+      }
+    };
+    fetchOtMst();
+  }, [sessionData, visible]);
 
   const counts = useMemo(() => {
     const total = records.length;
@@ -398,23 +471,33 @@ export const OTDashboardScreen = ({ sessionData, onBack, onEditBooking, onLogout
     return { total, open, closed, cancelled };
   }, [records]);
 
-  // Status/OT/search/date range are all sent to the server (see fetchList) and
-  // come back already filtered. Clearance isn't part of that API's params, so
-  // it's the only filter still applied on the client, on top of the server result.
+  // Status and clearance filters are applied on the client to keep global metric counts stable
   const filteredRecords = useMemo(() => {
-    if (clearanceFilter === 'All') return records;
+    let result = records;
 
-    return records.filter(r => {
-      const clr = (r.clearance || '').trim().toUpperCase();
-      if (clearanceFilter === 'Blank') return clr === '';
-      if (clearanceFilter === 'Done') return clr === 'Y' || clr === 'YES' || clr === 'DONE';
-      if (clearanceFilter === 'NotDone') return clr === 'N' || clr === 'NO' || clr === 'NOT DONE';
-      return true;
-    });
-  }, [records, clearanceFilter]);
+    // 1. Filter by Status tab (All / Open / Closed / Cancelled)
+    if (statusFilter !== 'All') {
+      result = result.filter(r => (r.status || '').trim().toUpperCase() === statusFilter.toUpperCase());
+    }
+
+    // 2. Filter by Clearance
+    if (clearanceFilter !== 'All') {
+      result = result.filter(r => {
+        const clr = (r.clearance || '').trim().toUpperCase();
+        if (clearanceFilter === 'Blank') return clr === '';
+        if (clearanceFilter === 'Done') return clr === 'Y' || clr === 'YES' || clr === 'DONE';
+        if (clearanceFilter === 'NotDone') return clr === 'N' || clr === 'NO' || clr === 'NOT DONE';
+        return true;
+      });
+    }
+
+    return result;
+  }, [records, statusFilter, clearanceFilter]);
 
   const handleExport = async () => {
-    if (filteredRecords.length === 0) {
+    const exportRecords = records;
+    if (exportRecords.length === 0) {
+      Alert.alert('No Records', 'There are no records to download for the selected date range.');
       return;
     }
 
@@ -437,7 +520,21 @@ export const OTDashboardScreen = ({ sessionData, onBack, onEditBooking, onLogout
       }
     }
 
-    const rowsHtml = filteredRecords.map((r, idx) => {
+    const genNow = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const genDateStr = `${pad(genNow.getDate())}/${pad(genNow.getMonth() + 1)}/${genNow.getFullYear()}`;
+    let genHours = genNow.getHours();
+    const genAmpm = genHours >= 12 ? 'PM' : 'AM';
+    genHours = genHours % 12;
+    genHours = genHours ? genHours : 12;
+    const genTimeStr = `${pad(genHours)}:${pad(genNow.getMinutes())}:${pad(genNow.getSeconds())} ${genAmpm}`;
+    const generatedOnDateTime = `${genDateStr} ${genTimeStr}`;
+
+    const fromDateFormatted = formatDMY(fromDate);
+    const toDateFormatted = formatDMY(toDate);
+    const dateRangeFormatted = `(From: ${fromDateFormatted} To: ${toDateFormatted})`;
+
+    const rowsHtml = exportRecords.map((r, idx) => {
       const actualDate = formatDMY(r.actualSurgeryDate);
       const timeStr = `${r.fromTime || '--:--'} - ${r.toTime || '--:--'}`;
       
@@ -547,8 +644,21 @@ export const OTDashboardScreen = ({ sessionData, onBack, onEditBooking, onLogout
           .subtitle {
             text-align: center;
             font-size: 11px;
-            color: #64748b;
             margin-bottom: 20px;
+          }
+          .gen-label {
+            color: #000000;
+            font-weight: bold;
+          }
+          .gen-datetime {
+            color: #64748b;
+            font-weight: 600;
+            margin-left: 4px;
+          }
+          .gen-range {
+            color: #ea580c;
+            font-weight: bold;
+            margin-left: 6px;
           }
           table {
             width: 100%;
@@ -637,7 +747,11 @@ export const OTDashboardScreen = ({ sessionData, onBack, onEditBooking, onLogout
       </head>
       <body>
         <h1>OT Call Register</h1>
-        <div class="subtitle">Generated on ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}</div>
+        <div class="subtitle">
+          <span class="gen-label">Generated On:</span>
+          <span class="gen-datetime">${generatedOnDateTime}</span>
+          <span class="gen-range">${dateRangeFormatted}</span>
+        </div>
         <table>
           <thead>
             <tr>
@@ -844,8 +958,27 @@ export const OTDashboardScreen = ({ sessionData, onBack, onEditBooking, onLogout
           >
             <CalendarIcon color={THEME.colors.textMedium} />
             <Text style={styles.datePickerText} numberOfLines={1}>
-              {MONTH_NAMES[calendarMonth]} {String(parseApiDate(fromDate)?.getDate() || 1).padStart(2, '0')}
-              –{String(parseApiDate(toDate)?.getDate() || daysInMonth(calendarYear, calendarMonth)).padStart(2, '0')}
+              {(() => {
+                const f = parseApiDate(fromDate);
+                const t = parseApiDate(toDate);
+                if (!f) return '--';
+                const fDay = String(f.getDate()).padStart(2, '0');
+                const fMonth = MONTH_NAMES[f.getMonth()];
+                const fYear = f.getFullYear();
+                if (!t || fromDate === toDate) {
+                  return `${fMonth} ${fDay}, ${fYear}`;
+                }
+                const tDay = String(t.getDate()).padStart(2, '0');
+                const tMonth = MONTH_NAMES[t.getMonth()];
+                const tYear = t.getFullYear();
+                if (fYear === tYear && f.getMonth() === t.getMonth()) {
+                  return `${fMonth} ${fDay}–${tDay}, ${fYear}`;
+                }
+                if (fYear === tYear) {
+                  return `${fMonth} ${fDay} – ${tMonth} ${tDay}, ${fYear}`;
+                }
+                return `${fMonth} ${fDay}, ${fYear} – ${tMonth} ${tDay}, ${tYear}`;
+              })()}
             </Text>
           </TouchableOpacity>
         </View>
@@ -929,23 +1062,24 @@ export const OTDashboardScreen = ({ sessionData, onBack, onEditBooking, onLogout
                 </View>
 
                 <Text style={styles.cardMetaLine} numberOfLines={1}>
-                  <Text style={styles.cardBookingLine}>Patient No: </Text><Text style={styles.cardBookingLineActive}>{item.patientNo || '--'}</Text> · <Text style={styles.cardBookingLine}>IP No: </Text><Text style={styles.cardBookingLineActive}>{item.ipNo || '--'}</Text> · Ward: {item.ward || '--'} · OT {item.otName || '--'}
-                  {item.ageSex ? ` · ${item.ageSex}` : ''}
+                  <Text style={styles.cardBookingLine}>Patient No: </Text><Text style={styles.cardBookingLineActive}>{item.patientNo || '--'}</Text> , <Text style={styles.cardBookingLine}>IP No: </Text><Text style={styles.cardBookingLineActive}>{item.ipNo || '--'}</Text> , <Text style={styles.cardBookingLine}>Ward: </Text><Text style={styles.cardBookingLineActive}>{item.ward || '--'}</Text> , <Text style={styles.cardBookingLine}>OT: </Text><Text style={styles.cardBookingLineActive}>{item.otName || '--'}</Text>
+                  {/* {item.ageSex ? ` · ${item.ageSex}` : ''} */}
                 </Text>
 
-                <Text style={styles.cardSurgeryName}>{item.surgeryName || '--'}</Text>
-
                 {item.otBookingDate && (
-                  <Text style={styles.cardBookingLine}>
-                    Booking date & time: <Text style={styles.cardBookingLineActive}>{formatBookingDateTimeWithSlots(item.otBookingDate, item.fromTime, item.toTime)}</Text>
+                  <Text style={styles.cardMetaLine} numberOfLines={1}>
+                    <Text style={styles.cardBookingLine}>Booking Date & Time: </Text><Text style={styles.cardBookingLineActive}>{formatBookingDateTimeWithSlots(item.otBookingDate, item.fromTime, item.toTime)}</Text>
                   </Text>
                 )}
 
                 <View style={styles.cardDoctorRow}>
                   <Text style={styles.cardDoctorText} numberOfLines={1}>
-                    DR. {item.surgeonDoctor || '--'}
+                    {item.surgeonDoctor || '--'}
                   </Text>
                 </View>
+
+                
+                <Text style={styles.cardSurgeryName}>{item.surgeryName || '--'}</Text>
 
                 <View style={styles.chipsRow}>
                   {CHECKLIST_ITEMS.map(chip => {
@@ -1024,20 +1158,20 @@ export const OTDashboardScreen = ({ sessionData, onBack, onEditBooking, onLogout
                 </Text>
                 {!selectedOt && <Text style={styles.checkmarkIcon}>✓</Text>}
               </TouchableOpacity>
-              {otOptions.map(ot => {
-                const active = selectedOt === ot;
+              {otMasterList.map(item => {
+                const active = selectedOt === item.Dcd;
                 return (
                   <TouchableOpacity
-                    key={ot}
+                    key={item.Cd}
                     activeOpacity={0.7}
                     style={styles.bottomSheetItem}
                     onPress={() => {
-                      setSelectedOt(ot);
+                      setSelectedOt(item.Dcd);
                       setShowOtModal(false);
                     }}
                   >
                     <Text style={[styles.bottomSheetItemText, active && styles.bottomSheetItemTextActive]}>
-                      OT {ot}
+                      {item.Dcd}
                     </Text>
                     {active && <Text style={styles.checkmarkIcon}>✓</Text>}
                   </TouchableOpacity>
@@ -1060,65 +1194,135 @@ export const OTDashboardScreen = ({ sessionData, onBack, onEditBooking, onLogout
             <View style={styles.calendarHeader}>
               <Text style={styles.calendarHeaderTitle}>Select Date Range</Text>
               <Text style={styles.calendarHeaderSubtitle}>
-                {tempStartDay ? `From ${MONTH_NAMES[calendarMonth]} ${String(tempStartDay).padStart(2, '0')}` : 'Select start date'}
-                {tempEndDay ? ` to ${MONTH_NAMES[calendarMonth]} ${String(tempEndDay).padStart(2, '0')}` : ''}
+                {tempStartDay
+                  ? tempEndDay && tempEndDay !== tempStartDay
+                    ? `From ${MONTH_NAMES[calendarMonth]} ${String(tempStartDay).padStart(2, '0')}, ${calendarYear} to ${MONTH_NAMES[calendarMonth]} ${String(tempEndDay).padStart(2, '0')}, ${calendarYear}`
+                    : `${MONTH_NAMES[calendarMonth]} ${String(tempStartDay).padStart(2, '0')}, ${calendarYear}`
+                  : `Select date in ${MONTH_NAMES[calendarMonth]} ${calendarYear}`}
               </Text>
             </View>
 
-            <View style={styles.weekdaysRow}>
-              {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((day) => (
-                <Text key={day} style={styles.weekdayText}>{day}</Text>
-              ))}
+            {/* Month/Year Navigation Selector */}
+            <View style={styles.monthSelectorRow}>
+              <TouchableOpacity onPress={handlePrevMonth} style={styles.monthNavBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Text style={styles.monthNavText}>‹</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                activeOpacity={0.7}
+                style={styles.monthLabelContainer}
+                onPress={() => setShowMonthYearPicker(prev => !prev)}
+              >
+                <Text style={styles.monthLabelText}>
+                  {`${MONTH_NAMES[calendarMonth]} ${calendarYear}`}
+                </Text>
+                <Text style={styles.monthDropdownArrow}>{showMonthYearPicker ? '▲' : '▼'}</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity onPress={handleNextMonth} style={styles.monthNavBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Text style={styles.monthNavText}>›</Text>
+              </TouchableOpacity>
             </View>
 
-            <View style={styles.daysGrid}>
-              {Array.from({ length: firstWeekdayOfMonth(calendarYear, calendarMonth) }).map((_, idx) => (
-                <View key={`empty-${idx}`} style={styles.emptyDayCell} />
-              ))}
-
-              {Array.from({ length: daysInMonth(calendarYear, calendarMonth) }).map((_, idx) => {
-                const day = idx + 1;
-                const isStart = tempStartDay === day;
-                const isEnd = tempEndDay === day;
-                const isSelected = isStart || isEnd;
-                const isInRange = !!(tempStartDay && tempEndDay && day > tempStartDay && day < tempEndDay);
-
-                return (
-                  <TouchableOpacity
-                    key={`day-${day}`}
-                    activeOpacity={0.8}
-                    onPress={() => handleCalendarDayPress(day)}
-                    style={[
-                      styles.dayCell,
-                      isStart && styles.dayCellStart,
-                      isEnd && styles.dayCellEnd,
-                      isInRange && styles.dayCellInRange,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.dayText,
-                        isSelected && styles.dayTextSelected,
-                        isInRange && styles.dayTextInRange,
-                      ]}
-                    >
-                      {day}
-                    </Text>
+            {showMonthYearPicker ? (
+              <View style={styles.monthYearPickerContainer}>
+                {/* Year Stepper */}
+                <View style={styles.yearStepperRow}>
+                  <TouchableOpacity onPress={() => setCalendarYear(prev => prev - 1)} style={styles.yearNavBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <Text style={styles.yearNavText}>‹</Text>
                   </TouchableOpacity>
-                );
-              })}
-            </View>
+                  <Text style={styles.yearLabelText}>{calendarYear}</Text>
+                  <TouchableOpacity onPress={() => setCalendarYear(prev => prev + 1)} style={styles.yearNavBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <Text style={styles.yearNavText}>›</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* 12 Months Grid */}
+                <View style={styles.monthGrid}>
+                  {MONTH_NAMES.map((mName, mIdx) => {
+                    const isSelected = calendarMonth === mIdx;
+                    return (
+                      <TouchableOpacity
+                        key={mName}
+                        activeOpacity={0.7}
+                        style={[styles.monthGridItem, isSelected && styles.monthGridItemSelected]}
+                        onPress={() => {
+                          setCalendarMonth(mIdx);
+                          setShowMonthYearPicker(false);
+                          setTempStartDay(null);
+                          setTempEndDay(null);
+                        }}
+                      >
+                        <Text style={[styles.monthGridItemText, isSelected && styles.monthGridItemTextSelected]}>
+                          {mName}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+            ) : (
+              <>
+                <View style={styles.weekdaysRow}>
+                  {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((day) => (
+                    <Text key={day} style={styles.weekdayText}>{day}</Text>
+                  ))}
+                </View>
+
+                <View style={styles.daysGrid}>
+                  {Array.from({ length: firstWeekdayOfMonth(calendarYear, calendarMonth) }).map((_, idx) => (
+                    <View key={`empty-${idx}`} style={styles.emptyDayCell} />
+                  ))}
+
+                  {Array.from({ length: daysInMonth(calendarYear, calendarMonth) }).map((_, idx) => {
+                    const day = idx + 1;
+                    const isStart = tempStartDay === day;
+                    const isEnd = tempEndDay === day;
+                    const isSelected = isStart || isEnd;
+                    const isInRange = !!(tempStartDay && tempEndDay && day > tempStartDay && day < tempEndDay);
+
+                    return (
+                      <TouchableOpacity
+                        key={`day-${day}`}
+                        activeOpacity={0.8}
+                        onPress={() => handleCalendarDayPress(day)}
+                        style={[
+                          styles.dayCell,
+                          isStart && styles.dayCellStart,
+                          isEnd && styles.dayCellEnd,
+                          isInRange && styles.dayCellInRange,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.dayText,
+                            isSelected && styles.dayTextSelected,
+                            isInRange && styles.dayTextInRange,
+                          ]}
+                        >
+                          {day}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </>
+            )}
 
             <View style={styles.calendarActionsRow}>
               <TouchableOpacity
                 activeOpacity={0.7}
                 style={styles.calendarClearBtn}
                 onPress={() => {
-                  setTempStartDay(null);
-                  setTempEndDay(null);
+                  const todayDate = new Date();
+                  setCalendarYear(todayDate.getFullYear());
+                  setCalendarMonth(todayDate.getMonth());
+                  setTempStartDay(todayDate.getDate());
+                  setTempEndDay(todayDate.getDate());
+                  setShowMonthYearPicker(false);
                 }}
               >
-                <Text style={styles.calendarClearText}>Clear</Text>
+                <Text style={styles.calendarClearText}>Today</Text>
               </TouchableOpacity>
 
               <View style={styles.calendarMainActions}>
@@ -1134,6 +1338,7 @@ export const OTDashboardScreen = ({ sessionData, onBack, onEditBooking, onLogout
                   activeOpacity={0.8}
                   style={styles.calendarApplyBtn}
                   onPress={() => {
+                    const todayDay = new Date().getDate();
                     const startDay = tempStartDay ?? 1;
                     const endDay = tempEndDay ?? tempStartDay ?? daysInMonth(calendarYear, calendarMonth);
                     setFromDate(formatYMD(new Date(calendarYear, calendarMonth, startDay)));
@@ -1439,7 +1644,7 @@ const styles = StyleSheet.create({
     }),
   },
   calendarHeader: {
-    marginBottom: 14,
+    marginBottom: 8,
     borderBottomWidth: 1,
     borderColor: '#f1f5f9',
     paddingBottom: 8,
@@ -1454,6 +1659,107 @@ const styles = StyleSheet.create({
     color: THEME.colors.textMedium,
     marginTop: 2,
     fontWeight: '600',
+  },
+  monthSelectorRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 6,
+    marginBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  monthNavBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  monthNavText: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#334155',
+    lineHeight: 22,
+  },
+  monthLabelContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 5,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: '#f1f5f9',
+  },
+  monthLabelText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  monthDropdownArrow: {
+    fontSize: 9,
+    color: THEME.colors.primary,
+    marginLeft: 6,
+    fontWeight: '800',
+  },
+  monthYearPickerContainer: {
+    paddingVertical: 6,
+  },
+  yearStepperRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  yearNavBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#f1f5f9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginHorizontal: 16,
+  },
+  yearNavText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  yearLabelText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  monthGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  monthGridItem: {
+    width: '23%',
+    paddingVertical: 9,
+    borderRadius: 8,
+    backgroundColor: '#f8fafc',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  monthGridItemSelected: {
+    backgroundColor: THEME.colors.primary,
+    borderColor: THEME.colors.primary,
+  },
+  monthGridItemText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  monthGridItemTextSelected: {
+    color: '#ffffff',
+    fontWeight: '800',
   },
   weekdaysRow: {
     flexDirection: 'row',
@@ -1754,7 +2060,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 12,
     fontWeight: '600',
-    color: THEME.colors.textMedium,
+    color: THEME.colors.textDark,
     marginRight: 8,
   },
   cardDateText: {

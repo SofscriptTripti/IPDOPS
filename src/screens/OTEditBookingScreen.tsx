@@ -18,7 +18,11 @@ import { THEME } from '../constants/theme';
 import { UserSessionData } from '../services/authService';
 import { trackerService } from '../services/trackerService';
 import { OtCallRegisterItem } from './OTDashboardScreen';
-import Icon from 'react-native-vector-icons/Ionicons';
+import Ionicons from 'react-native-vector-icons/Ionicons';
+import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
+import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
+import FontAwesome5 from 'react-native-vector-icons/FontAwesome5';
+import FontAwesome6 from 'react-native-vector-icons/FontAwesome6';
 
 interface OTEditBookingScreenProps {
   sessionData: UserSessionData;
@@ -29,19 +33,36 @@ interface OTEditBookingScreenProps {
 
 type YesNo = 'Y' | 'N' | null;
 
-const CLINICAL_FIELDS: { key: keyof OtCallRegisterItem; label: string }[] = [
-  { key: 'cbc', label: 'CBC' },
-  { key: 'creat', label: 'Creat' },
-  { key: 'ptInr', label: 'PT / INR' },
-  { key: 'vdrlHiv', label: 'VDRL / HIV' },
-  { key: 'xray', label: 'X-Ray' },
-  { key: 'echo2d', label: '2D Echo' },
-  { key: 'mrsa', label: 'MRSA' },
-  { key: 'bloodThinner', label: 'Blood Thinner' },
-  { key: 'fitness', label: 'Fitness' },
+interface ClinicalFieldItem {
+  key: keyof OtCallRegisterItem;
+  label: string;
+  iconName: string;
+}
+
+const GRID_CLINICAL_FIELDS: ClinicalFieldItem[] = [
+  { key: 'cbc', label: 'CBC', iconName: 'flask-outline' },
+  { key: 'creat', label: 'CREAT', iconName: 'beaker-outline' },
+  { key: 'ptInr', label: 'PT / INR', iconName: 'water-outline' },
+  { key: 'vdrlHiv', label: 'VDRL / HIV', iconName: 'virus-outline' },
+  { key: 'xray', label: 'X-RAY', iconName: 'radiology-box-outline' },
+  { key: 'echo2d', label: '2D ECHO', iconName: 'heart-pulse' },
+  { key: 'mrsa', label: 'MRSA', iconName: 'virus' },
+  { key: 'bloodThinner', label: 'BLOOD THINNER', iconName: 'water' },
+];
+
+const FITNESS_FIELD: ClinicalFieldItem = {
+  key: 'fitness',
+  label: 'FITNESS',
+  iconName: 'pulse',
+};
+
+const ALL_CLINICAL_FIELDS: ClinicalFieldItem[] = [
+  ...GRID_CLINICAL_FIELDS,
+  FITNESS_FIELD,
 ];
 
 const STATUS_OPTIONS = ['OPEN', 'CLOSED', 'CANCELLED'];
+const SECTION_HEADER_ICON_COLOR = '#f97316';
 
 const parseDate = (value: string | null): Date | null => {
   if (!value) return null;
@@ -67,7 +88,7 @@ const formatDisplayDateTime = (value: string | null): string => {
   hours = hours % 12;
   hours = hours ? hours : 12;
   const timePart = `${pad(hours)}:${pad(d.getMinutes())} ${ampm}`;
-  return `${datePart} , ${timePart}`;
+  return `${datePart}, ${timePart}`;
 };
 
 const MONTH_NAMES = [
@@ -95,11 +116,12 @@ const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   CANCELLED: { bg: 'rgba(239, 68, 68, 0.12)', text: '#dc2626' },
 };
 
-// Any value straight from the backend renders as-is. A null/blank value shows
-// a muted "--" so it's clearly "no data from the server" rather than a real value.
+// Any value straight from the backend renders as-is. A null/blank/hyphen value shows
+// a muted "--" in grey so it's clearly "no data from the server" rather than a real value.
 const FieldValue = ({ value }: { value: string | null | undefined }) => {
-  if (value && value.trim()) {
-    return <Text style={styles.fieldValue}>{value}</Text>;
+  const trimmed = value?.trim();
+  if (trimmed && trimmed !== '-' && trimmed !== '--' && trimmed.toLowerCase() !== 'null' && trimmed.toLowerCase() !== 'undefined') {
+    return <Text style={styles.fieldValue}>{trimmed}</Text>;
   }
   return <Text style={styles.fieldValueEmpty}>--</Text>;
 };
@@ -140,18 +162,21 @@ export const OTEditBookingScreen = ({ sessionData, booking, onBack, onSaved }: O
     setCathlabAdvice(r.cathlabAdvice || '');
     setRemark(r.remark || '');
     const values: Record<string, YesNo> = {};
-    CLINICAL_FIELDS.forEach(f => {
+    ALL_CLINICAL_FIELDS.forEach(f => {
       values[f.key as string] = toYesNo(r[f.key] as string | null);
     });
     setClinicalValues(values);
 
     const dates: Record<string, string> = {
       cbc: r.cbcDtTm || '',
-      creat: r.creatDtTm || r.CreatDtTm || '',
-      ptInr: r.ptInrDtTm || r['PT/INRCrTm'] || '',
-      vdrlHiv: r.vdrlHivDtTm || r['VDRL/HIVDtTm'] || '',
-      xray: r.xrayDtTm || r['X-RayDtTm'] || '',
-      echo2d: r.echo2dDtTm || r['2DEchoDtTm'] || '',
+      creat: r.creatDtTm || (r as any).CreatDtTm || '',
+      ptInr: r.ptInrDtTm || (r as any)['PT/INRCrTm'] || '',
+      vdrlHiv: r.vdrlHivDtTm || (r as any)['VDRL/HIVDtTm'] || '',
+      xray: r.xrayDtTm || (r as any)['X-RayDtTm'] || '',
+      echo2d: r.echo2dDtTm || (r as any)['2DEchoDtTm'] || '',
+      mrsa: (r as any).mrsaDtTm || '',
+      bloodThinner: (r as any).bloodThinnerDtTm || '',
+      fitness: (r as any).fitnessDtTm || '',
     };
     setClinicalDates(dates);
   }, []);
@@ -244,6 +269,14 @@ export const OTEditBookingScreen = ({ sessionData, booking, onBack, onSaved }: O
     setShowPickerModal(false);
   };
 
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+
+  const handleSuccessConfirm = () => {
+    setShowSuccessModal(false);
+    onSaved();
+    onBack();
+  };
+
   const handleSave = async () => {
     if (!record) return;
     setIsSaving(true);
@@ -269,16 +302,18 @@ export const OTEditBookingScreen = ({ sessionData, booking, onBack, onSaved }: O
         echo2d: clinicalValues.echo2d,
         echo2dDtTm: clinicalDates.echo2d?.trim() || null,
         mrsa: clinicalValues.mrsa,
+        mrsaDtTm: clinicalDates.mrsa?.trim() || null,
         bloodThinner: clinicalValues.bloodThinner,
+        bloodThinnerDtTm: clinicalDates.bloodThinner?.trim() || null,
         fitness: clinicalValues.fitness,
+        fitnessDtTm: clinicalDates.fitness?.trim() || null,
         remark: remark.trim() || null,
       };
 
       const res = await trackerService.updateOtBooking(sessionData.token, payload);
 
       if (res && res.success) {
-        onSaved();
-        onBack();
+        setShowSuccessModal(true);
       } else {
         Alert.alert('Failed to save', res?.message || 'The server rejected the update. Please retry.');
       }
@@ -349,7 +384,13 @@ export const OTEditBookingScreen = ({ sessionData, booking, onBack, onSaved }: O
           <View style={styles.sectionCard}>
             <View style={styles.sectionHeaderRow}>
               <View style={styles.sectionHeaderLeft}>
-                <View style={[styles.sectionAccentDot, { backgroundColor: THEME.colors.primary }]} />
+                <FontAwesome6
+                  name="bed-pulse"
+                  size={21}
+                  color={SECTION_HEADER_ICON_COLOR}
+                  solid
+                  style={styles.sectionHeaderIcon}
+                />
                 <Text style={styles.sectionTitle}>Patient & Schedule</Text>
               </View>
 
@@ -460,120 +501,172 @@ export const OTEditBookingScreen = ({ sessionData, booking, onBack, onSaved }: O
                 </View>
                 <View style={styles.fieldCell}>
                   <Text style={styles.fieldLabel}>Robotic</Text>
-                  <View style={[styles.miniBadge, record.robotic ? styles.miniBadgeYes : styles.miniBadgeNo]}>
-                    <Text style={[styles.miniBadgeText, record.robotic ? styles.miniBadgeTextYes : styles.miniBadgeTextNo]}>
-                      {record.robotic || 'No'}
-                    </Text>
-                  </View>
+                  <FieldValue value={record.robotic} />
                 </View>
               </View>
             </View>
           </View>
 
-          {/* Clinical Clearance */}
+          {/* Clinical Clearance Section Card */}
           <View style={styles.sectionCard}>
-            <View style={styles.sectionHeaderRow}>
-              <View style={styles.sectionHeaderLeft}>
-                <View style={[styles.sectionAccentDot, { backgroundColor: THEME.colors.success }]} />
-                <Text style={styles.sectionTitle}>Clinical Clearance</Text>
+            {/* Header matching the image */}
+            <View style={styles.clinicalHeaderRow}>
+              <View style={styles.clinicalHeaderLeft}>
+                <FontAwesome5
+                  name="hospital-user"
+                  size={22}
+                  color={SECTION_HEADER_ICON_COLOR}
+                  solid
+                  style={styles.sectionHeaderIcon}
+                />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.clinicalHeaderTitle}>Clinical Clearance</Text>
+                  
+                </View>
               </View>
             </View>
 
-            <View style={styles.fieldsGrid}>
-              {Array.from({ length: Math.ceil(CLINICAL_FIELDS.length / 2) }).map((_, rowIdx) => {
-                const rowFields = CLINICAL_FIELDS.slice(rowIdx * 2, rowIdx * 2 + 2);
-                const isLastRow = rowIdx === Math.ceil(CLINICAL_FIELDS.length / 2) - 1;
+            {/* 2-Column Grid for the 8 standard items (CBC, CREAT, PT/INR, VDRL/HIV, X-RAY, 2D ECHO, MRSA, BLOOD THINNER) */}
+            <View style={styles.clinicalGrid}>
+              {Array.from({ length: Math.ceil(GRID_CLINICAL_FIELDS.length / 2) }).map((_, rowIdx) => {
+                const rowFields = GRID_CLINICAL_FIELDS.slice(rowIdx * 2, rowIdx * 2 + 2);
+                const hasOpenField = rowFields.some(f => openClinicalField === f.key);
                 return (
-                  <View key={rowIdx} style={[styles.fieldRowPlain, isLastRow && styles.fieldRowLastPlain]}>
-                    {rowFields.map(field => {
+                  <View
+                    key={rowIdx}
+                    style={[
+                      styles.clinicalGridRow,
+                      { zIndex: hasOpenField ? 5000 : 100 - rowIdx },
+                    ]}
+                  >
+                    {rowFields.map((field, colIdx) => {
                       const fieldKey = field.key as string;
                       const value = clinicalValues[fieldKey];
                       const isOpen = openClinicalField === fieldKey;
-                      return (
-                        <View key={fieldKey} style={styles.fieldCell}>
-                          <Text style={styles.fieldLabel}>{field.label}</Text>
-                          <View style={styles.controlsRow}>
-                            <TouchableOpacity
-                              activeOpacity={0.7}
-                              style={[
-                                styles.selectBox,
-                                value === 'Y' && styles.selectBoxYes,
-                                value === 'N' && styles.selectBoxNo,
-                                ['cbc', 'creat', 'ptInr', 'vdrlHiv', 'xray', 'echo2d'].includes(fieldKey) ? { flex: 1, marginRight: 6 } : { flex: 1 },
-                              ]}
-                              onPress={() => setOpenClinicalField(isOpen ? null : fieldKey)}
-                            >
-                              <Text
-                                numberOfLines={1}
-                                style={[
-                                  styles.selectBoxText,
-                                  value === null && styles.selectBoxTextPlaceholder,
-                                  value === 'Y' && styles.selectBoxTextYes,
-                                  value === 'N' && styles.selectBoxTextNo,
-                                ]}
-                              >
-                                {yesNoLabel(value)}
-                              </Text>
-                              <Text
-                                style={[
-                                  styles.selectChevron,
-                                  value === 'Y' && styles.selectBoxTextYes,
-                                  value === 'N' && styles.selectBoxTextNo,
-                                ]}
-                              >
-                                {isOpen ? '▴' : '▾'}
-                              </Text>
-                            </TouchableOpacity>
+                      const dateValue = clinicalDates[fieldKey];
 
-                            {['cbc', 'creat', 'ptInr', 'vdrlHiv', 'xray', 'echo2d'].includes(fieldKey) && (
+                      return (
+                        <View
+                          key={fieldKey}
+                          style={[
+                            styles.clinicalGridCol,
+                            colIdx === 0 ? { marginRight: 8 } : { marginLeft: 8 },
+                            { zIndex: isOpen ? 5001 : 1 },
+                          ]}
+                        >
+                          <View style={[styles.clinicalFieldCell, { zIndex: isOpen ? 5002 : 1 }]}>
+                            {/* Field Header: Icon + Label */}
+                            <View style={styles.clinicalFieldHeader}>
+                              <MaterialCommunityIcons
+                                name={field.iconName}
+                                size={14}
+                                color="#475569"
+                                style={styles.clinicalFieldIcon}
+                              />
+                              <Text style={styles.clinicalFieldLabel}>{field.label}</Text>
+                            </View>
+
+                            {/* Controls Row: Dropdown + Date Time Picker */}
+                            <View style={[styles.clinicalControlsRow, { zIndex: isOpen ? 5003 : 1 }]}>
+                              {/* Dropdown Container */}
+                              <View style={[styles.clinicalSelectContainer, { zIndex: isOpen ? 5004 : 1 }]}>
+                                <TouchableOpacity
+                                  activeOpacity={0.75}
+                                  style={[
+                                    styles.clinicalSelectBtn,
+                                    isOpen && styles.clinicalSelectBtnOpen,
+                                    value === 'Y' && styles.clinicalSelectBtnYes,
+                                    value === 'N' && styles.clinicalSelectBtnNo,
+                                  ]}
+                                  onPress={() => setOpenClinicalField(isOpen ? null : fieldKey)}
+                                >
+                                  <Text
+                                    numberOfLines={1}
+                                    style={[
+                                      styles.clinicalSelectBtnText,
+                                      value === null && styles.clinicalSelectBtnTextPlaceholder,
+                                      value === 'Y' && styles.clinicalSelectBtnTextYes,
+                                      value === 'N' && styles.clinicalSelectBtnTextNo,
+                                    ]}
+                                  >
+                                    {yesNoLabel(value)}
+                                  </Text>
+                                  <MaterialCommunityIcons
+                                    name={isOpen ? "chevron-up" : "chevron-down"}
+                                    size={15}
+                                    color={value === 'Y' ? '#16a34a' : value === 'N' ? '#dc2626' : '#94a3b8'}
+                                  />
+                                </TouchableOpacity>
+
+                                {/* Inline Dropdown Options */}
+                                {isOpen && (
+                                  <View style={styles.clinicalOptionsDropdown}>
+                                    {YES_NO_OPTIONS.map((opt, optIdx) => {
+                                      const active = value === opt;
+                                      const isFirst = optIdx === 0;
+                                      const isLast = optIdx === YES_NO_OPTIONS.length - 1;
+                                      return (
+                                        <TouchableOpacity
+                                          key={String(opt)}
+                                          activeOpacity={0.7}
+                                          style={[
+                                            styles.clinicalOptionRow,
+                                            isFirst && styles.clinicalOptionRowFirst,
+                                            isLast && styles.clinicalOptionRowLast,
+                                            active && styles.clinicalOptionRowActive,
+                                          ]}
+                                          onPress={() => {
+                                            setClinicalValues(prev => ({ ...prev, [fieldKey]: opt }));
+                                            setOpenClinicalField(null);
+                                          }}
+                                        >
+                                          <Text
+                                            style={[
+                                              styles.clinicalOptionText,
+                                              active && styles.clinicalOptionTextActive,
+                                            ]}
+                                          >
+                                            {yesNoLabel(opt)}
+                                          </Text>
+                                          {active && <Text style={styles.clinicalOptionCheckmark}>✓</Text>}
+                                        </TouchableOpacity>
+                                      );
+                                    })}
+                                  </View>
+                                )}
+                              </View>
+
+                              {/* Date & Time Picker Button */}
                               <TouchableOpacity
-                                activeOpacity={0.7}
+                                activeOpacity={0.75}
                                 style={[
-                                  styles.dateTimeSelectBox,
-                                  clinicalDates[fieldKey] ? styles.dateTimeSelectBoxActive : null,
-                                  { flex: 1 },
+                                  styles.clinicalDateTimeBtn,
+                                  dateValue ? styles.clinicalDateTimeBtnActive : null,
                                 ]}
                                 onPress={() => {
                                   setSelectedPickerField(fieldKey);
-                                  setPickerInitialValue(clinicalDates[fieldKey] || '');
+                                  setPickerInitialValue(dateValue || '');
                                   setShowPickerModal(true);
                                 }}
                               >
+                                <MaterialCommunityIcons
+                                  name="calendar-outline"
+                                  size={13}
+                                  color={dateValue ? THEME.colors.primary : '#64748b'}
+                                  style={{ marginRight: 4 }}
+                                />
                                 <Text
                                   numberOfLines={1}
                                   style={[
-                                    styles.dateTimeSelectBoxText,
-                                    clinicalDates[fieldKey] ? styles.dateTimeSelectBoxTextActive : null
+                                    styles.clinicalDateTimeBtnText,
+                                    dateValue ? styles.clinicalDateTimeBtnTextActive : null,
                                   ]}
                                 >
-                                  {clinicalDates[fieldKey] ? formatDisplayDateTime(clinicalDates[fieldKey]) : 'Select Date & Time'}
+                                  {dateValue ? formatDisplayDateTime(dateValue) : 'Select Date & Time'}
                                 </Text>
                               </TouchableOpacity>
-                            )}
-                          </View>
-                          {isOpen && (
-                            <View style={styles.optionsBox}>
-                              {YES_NO_OPTIONS.map(opt => {
-                                const active = value === opt;
-                                return (
-                                  <TouchableOpacity
-                                    key={String(opt)}
-                                    activeOpacity={0.7}
-                                    style={styles.optionRow}
-                                    onPress={() => {
-                                      setClinicalValues(prev => ({ ...prev, [fieldKey]: opt }));
-                                      setOpenClinicalField(null);
-                                    }}
-                                  >
-                                    <Text style={[styles.optionText, active && styles.optionTextActive]}>
-                                      {yesNoLabel(opt)}
-                                    </Text>
-                                    {active && <Text style={styles.optionCheckmark}>✓</Text>}
-                                  </TouchableOpacity>
-                                );
-                              })}
                             </View>
-                          )}
+                          </View>
                         </View>
                       );
                     })}
@@ -582,32 +675,166 @@ export const OTEditBookingScreen = ({ sessionData, booking, onBack, onSaved }: O
               })}
             </View>
 
-            <Text style={[styles.fieldLabel, { marginTop: 14 }]}>Cathlab Advice</Text>
-            <TextInput
-              style={styles.textInput}
-              value={cathlabAdvice}
-              onChangeText={setCathlabAdvice}
-              placeholder="Enter cathlab advice"
-              placeholderTextColor={THEME.colors.textMuted}
-            />
+            {/* Full-width Fitness Row */}
+            <View style={[styles.clinicalFieldCellFull, { zIndex: openClinicalField === 'fitness' ? 5000 : 1 }]}>
+              {/* Header */}
+              <View style={styles.clinicalFieldHeader}>
+                <MaterialCommunityIcons
+                  name={FITNESS_FIELD.iconName}
+                  size={15}
+                  color="#475569"
+                  style={styles.clinicalFieldIcon}
+                />
+                <Text style={styles.clinicalFieldLabel}>{FITNESS_FIELD.label}</Text>
+              </View>
 
-            <Text style={[styles.fieldLabel, { marginTop: 14 }]}>Remark</Text>
-            <TextInput
-              style={[styles.textInput, styles.textArea]}
-              value={remark}
-              onChangeText={setRemark}
-              placeholder="Enter remark"
-              placeholderTextColor={THEME.colors.textMuted}
-              multiline
-              numberOfLines={3}
-            />
+              {/* Controls Row */}
+              <View style={[styles.clinicalControlsRow, { zIndex: openClinicalField === 'fitness' ? 5001 : 1 }]}>
+                {/* Dropdown Select */}
+                <View style={[styles.clinicalSelectContainer, styles.clinicalSelectContainerFull, { zIndex: openClinicalField === 'fitness' ? 5002 : 1 }]}>
+                  <TouchableOpacity
+                    activeOpacity={0.75}
+                    style={[
+                      styles.clinicalSelectBtn,
+                      styles.clinicalSelectBtnFull,
+                      openClinicalField === 'fitness' && styles.clinicalSelectBtnOpen,
+                      clinicalValues.fitness === 'Y' && styles.clinicalSelectBtnYes,
+                      clinicalValues.fitness === 'N' && styles.clinicalSelectBtnNo,
+                    ]}
+                    onPress={() => setOpenClinicalField(openClinicalField === 'fitness' ? null : 'fitness')}
+                  >
+                    <Text
+                      numberOfLines={1}
+                      style={[
+                        styles.clinicalSelectBtnText,
+                        clinicalValues.fitness === null && styles.clinicalSelectBtnTextPlaceholder,
+                        clinicalValues.fitness === 'Y' && styles.clinicalSelectBtnTextYes,
+                        clinicalValues.fitness === 'N' && styles.clinicalSelectBtnTextNo,
+                      ]}
+                    >
+                      {yesNoLabel(clinicalValues.fitness)}
+                    </Text>
+                    <MaterialCommunityIcons
+                      name={openClinicalField === 'fitness' ? "chevron-up" : "chevron-down"}
+                      size={15}
+                      color={clinicalValues.fitness === 'Y' ? '#16a34a' : clinicalValues.fitness === 'N' ? '#dc2626' : '#94a3b8'}
+                    />
+                  </TouchableOpacity>
+
+                  {/* Dropdown Menu */}
+                  {openClinicalField === 'fitness' && (
+                    <View style={styles.clinicalOptionsDropdown}>
+                      {YES_NO_OPTIONS.map((opt, optIdx) => {
+                        const active = clinicalValues.fitness === opt;
+                        const isFirst = optIdx === 0;
+                        const isLast = optIdx === YES_NO_OPTIONS.length - 1;
+                        return (
+                          <TouchableOpacity
+                            key={String(opt)}
+                            activeOpacity={0.7}
+                            style={[
+                              styles.clinicalOptionRow,
+                              isFirst && styles.clinicalOptionRowFirst,
+                              isLast && styles.clinicalOptionRowLast,
+                              active && styles.clinicalOptionRowActive,
+                            ]}
+                            onPress={() => {
+                              setClinicalValues(prev => ({ ...prev, fitness: opt }));
+                              setOpenClinicalField(null);
+                            }}
+                          >
+                            <Text
+                              style={[
+                                styles.clinicalOptionText,
+                                active && styles.clinicalOptionTextActive,
+                              ]}
+                            >
+                              {yesNoLabel(opt)}
+                            </Text>
+                            {active && <Text style={styles.clinicalOptionCheckmark}>✓</Text>}
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  )}
+                </View>
+
+                {/* Date & Time Picker */}
+                <TouchableOpacity
+                  activeOpacity={0.75}
+                  style={[
+                    styles.clinicalDateTimeBtn,
+                    styles.clinicalDateTimeBtnFull,
+                    clinicalDates.fitness ? styles.clinicalDateTimeBtnActive : null,
+                  ]}
+                  onPress={() => {
+                    setSelectedPickerField('fitness');
+                    setPickerInitialValue(clinicalDates.fitness || '');
+                    setShowPickerModal(true);
+                  }}
+                >
+                  <MaterialCommunityIcons
+                    name="calendar-outline"
+                    size={14}
+                    color={clinicalDates.fitness ? THEME.colors.primary : '#64748b'}
+                    style={{ marginRight: 5 }}
+                  />
+                  <Text
+                    numberOfLines={1}
+                    style={[
+                      styles.clinicalDateTimeBtnText,
+                      clinicalDates.fitness ? styles.clinicalDateTimeBtnTextActive : null,
+                    ]}
+                  >
+                    {clinicalDates.fitness ? formatDisplayDateTime(clinicalDates.fitness) : 'Select Date & Time'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Cathlab Advice */}
+            <View style={styles.clinicalSectionInputWrapper}>
+              <View style={styles.clinicalFieldHeader}>
+                <MaterialCommunityIcons name="clipboard-text-outline" size={15} color="#475569" style={styles.clinicalFieldIcon} />
+                <Text style={styles.clinicalFieldLabel}>CATHLAB ADVICE</Text>
+              </View>
+              <TextInput
+                style={styles.clinicalTextInput}
+                value={cathlabAdvice}
+                onChangeText={setCathlabAdvice}
+                placeholder="Enter cathlab advice"
+                placeholderTextColor="#94a3b8"
+              />
+            </View>
+
+            {/* Remark */}
+            <View style={styles.clinicalSectionInputWrapper}>
+              <View style={styles.clinicalFieldHeader}>
+                <MaterialCommunityIcons name="comment-text-outline" size={15} color="#475569" style={styles.clinicalFieldIcon} />
+                <Text style={styles.clinicalFieldLabel}>REMARK</Text>
+              </View>
+              <TextInput
+                style={[styles.clinicalTextInput, styles.clinicalTextArea]}
+                value={remark}
+                onChangeText={setRemark}
+                placeholder="Enter remark"
+                placeholderTextColor="#94a3b8"
+                multiline
+                numberOfLines={3}
+              />
+            </View>
           </View>
 
           {/* Billing & Notes */}
           <View style={styles.sectionCard}>
             <View style={styles.sectionHeaderRow}>
               <View style={styles.sectionHeaderLeft}>
-                <View style={[styles.sectionAccentDot, { backgroundColor: THEME.colors.warning }]} />
+                <MaterialIcons
+                  name="receipt-long"
+                  size={24}
+                  color={SECTION_HEADER_ICON_COLOR}
+                  style={styles.sectionHeaderIcon}
+                />
                 <Text style={styles.sectionTitle}>Billing & Notes</Text>
               </View>
             </View>
@@ -696,7 +923,7 @@ export const OTEditBookingScreen = ({ sessionData, booking, onBack, onSaved }: O
                     style={styles.backToCalBtn}
                     onPress={() => setPickerStep('date')}
                   >
-                    <Icon name="calendar-outline" size={22} color={THEME.colors.primary} />
+                    <Ionicons name="calendar-outline" size={22} color={THEME.colors.primary} />
                   </TouchableOpacity>
                 )}
                 <TouchableOpacity
@@ -932,6 +1159,31 @@ export const OTEditBookingScreen = ({ sessionData, booking, onBack, onSaved }: O
           </View>
         </View>
       </Modal>
+
+      {/* App-Themed Success Popup Modal */}
+      <Modal
+        visible={showSuccessModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={handleSuccessConfirm}
+      >
+        <View style={styles.successModalOverlay}>
+          <View style={styles.successModalContent}>
+            
+            <Text style={styles.successModalTitle}>Success!</Text>
+            <Text style={styles.successModalMessage}>
+              Data has been saved successfully.
+            </Text>
+            <TouchableOpacity
+              activeOpacity={0.8}
+              style={styles.successModalBtn}
+              onPress={handleSuccessConfirm}
+            >
+              <Text style={styles.successModalBtnText}>OK</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -1039,6 +1291,9 @@ const styles = StyleSheet.create({
   sectionHeaderLeft: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  sectionHeaderIcon: {
+    marginRight: 9,
   },
   sectionAccentDot: {
     width: 8,
@@ -1567,5 +1822,318 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800',
     color: '#ffffff',
+  },
+  successModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  successModalContent: {
+    width: '100%',
+    maxWidth: 320,
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.15,
+        shadowRadius: 12,
+      },
+      android: {
+        elevation: 8,
+      },
+    }),
+  },
+  successIconCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(11, 102, 92, 0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  successCheckmark: {
+    fontSize: 28,
+    color: THEME.colors.primary,
+    fontWeight: '800',
+  },
+  successModalTitle: {
+    fontSize: 19,
+    fontWeight: '800',
+    color: '#0f172a',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  successModalMessage: {
+    fontSize: 14,
+    color: '#64748b',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+  successModalBtn: {
+    backgroundColor: THEME.colors.primary,
+    borderRadius: 12,
+    width: '100%',
+    height: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...Platform.select({
+      ios: {
+        shadowColor: THEME.colors.primary,
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.25,
+        shadowRadius: 5,
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
+  },
+  successModalBtnText: {
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
+  clinicalHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  clinicalHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 8,
+  },
+  clinicalHeaderIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: '#059669',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  clinicalHeaderTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  clinicalHeaderSubtitle: {
+    fontSize: 11.5,
+    color: '#64748b',
+    marginTop: 2,
+  },
+  requiredBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ecfdf5',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#a7f3d0',
+  },
+  requiredBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#059669',
+  },
+  clinicalGrid: {
+    marginBottom: 4,
+  },
+  clinicalGridRow: {
+    flexDirection: 'row',
+    marginBottom: 14,
+  },
+  clinicalGridCol: {
+    flex: 1,
+  },
+  clinicalFieldCell: {
+    position: 'relative',
+    zIndex: 1,
+  },
+  clinicalFieldCellFull: {
+    position: 'relative',
+    zIndex: 1,
+    marginBottom: 14,
+  },
+  clinicalFieldHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  clinicalFieldIcon: {
+    marginRight: 5,
+  },
+  clinicalFieldLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748b',
+    letterSpacing: 0.35,
+  },
+  clinicalControlsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  clinicalSelectContainer: {
+    flex: 0.85,
+    marginRight: 6,
+    position: 'relative',
+  },
+  clinicalSelectContainerFull: {
+    flex: 1,
+    marginRight: 8,
+  },
+  clinicalSelectBtn: {
+    width: '100%',
+    height: 38,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    backgroundColor: '#ffffff',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 8,
+  },
+  clinicalSelectBtnOpen: {
+    borderColor: THEME.colors.primary,
+    backgroundColor: '#f8fafc',
+  },
+  clinicalSelectBtnFull: {
+    width: '100%',
+  },
+  clinicalSelectBtnYes: {
+    backgroundColor: '#dcfce7',
+    borderColor: '#86efac',
+  },
+  clinicalSelectBtnNo: {
+    backgroundColor: '#fee2e2',
+    borderColor: '#fca5a5',
+  },
+  clinicalSelectBtnText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  clinicalSelectBtnTextPlaceholder: {
+    color: '#64748b',
+    fontWeight: '500',
+  },
+  clinicalSelectBtnTextYes: {
+    color: '#16a34a',
+    fontWeight: '700',
+  },
+  clinicalSelectBtnTextNo: {
+    color: '#dc2626',
+    fontWeight: '700',
+  },
+  clinicalDateTimeBtn: {
+    flex: 1.15,
+    height: 38,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    backgroundColor: '#ffffff',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+  },
+  clinicalDateTimeBtnFull: {
+    flex: 1.5,
+  },
+  clinicalDateTimeBtnActive: {
+    borderColor: '#94a3b8',
+  },
+  clinicalDateTimeBtnText: {
+    fontSize: 10.5,
+    color: '#64748b',
+    fontWeight: '500',
+    flex: 1,
+  },
+  clinicalDateTimeBtnTextActive: {
+    color: '#0f172a',
+    fontWeight: '700',
+  },
+  clinicalOptionsDropdown: {
+    position: 'absolute',
+    top: 42,
+    left: 0,
+    right: 0,
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    zIndex: 99999,
+    elevation: 12,
+    overflow: 'hidden',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+  },
+  clinicalOptionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+    backgroundColor: '#ffffff',
+  },
+  clinicalOptionRowFirst: {
+    borderTopLeftRadius: 7,
+    borderTopRightRadius: 7,
+  },
+  clinicalOptionRowLast: {
+    borderBottomWidth: 0,
+    borderBottomLeftRadius: 7,
+    borderBottomRightRadius: 7,
+  },
+  clinicalOptionRowActive: {
+    backgroundColor: '#f8fafc',
+  },
+  clinicalOptionText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  clinicalOptionTextActive: {
+    color: THEME.colors.primary,
+    fontWeight: '800',
+  },
+  clinicalOptionCheckmark: {
+    color: THEME.colors.primary,
+    fontWeight: '800',
+    fontSize: 12,
+  },
+  clinicalSectionInputWrapper: {
+    marginTop: 4,
+    marginBottom: 14,
+  },
+  clinicalTextInput: {
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 13,
+    color: '#0f172a',
+  },
+  clinicalTextArea: {
+    minHeight: 65,
+    textAlignVertical: 'top',
   },
 });

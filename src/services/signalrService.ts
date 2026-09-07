@@ -125,7 +125,7 @@ class SignalRService {
         .configureLogging(LogLevel.Information)
         .build();
 
-      // Listen for chat message payloads (generic mapping support)
+      // Listen for chat / OT data payloads (generic mapping support)
       const listenMethods = [
         'ReceiveMessage',
         'receiveMessage',
@@ -137,7 +137,35 @@ class SignalRService {
         'ReceiveOTBooking',
         'receiveOTBooking',
         'OTBookingReceived',
-        'otBookingReceived'
+        'otBookingReceived',
+        'NewDataAlert',
+        'newDataAlert',
+        'NewDataalert',
+        'newDataalert',
+        'NewData',
+        'newData',
+        'DataAlert',
+        'dataAlert',
+        'ReceiveOtCallRegister',
+        'receiveOtCallRegister',
+        'OtCallRegisterUpdated',
+        'otCallRegisterUpdated',
+        'OtCallRegister',
+        'otCallRegister',
+        'OtRegister',
+        'otRegister',
+        'ReceiveBooking',
+        'receiveBooking',
+        'ReceiveOT',
+        'receiveOT',
+        'UpdateOTBooking',
+        'updateOTBooking',
+        'BookingUpdated',
+        'bookingUpdated',
+        'BookingAdded',
+        'bookingAdded',
+        'DataUpdated',
+        'dataUpdated',
       ];
 
       for (const method of listenMethods) {
@@ -149,6 +177,10 @@ class SignalRService {
 
           this.onMessageReceivedCallbacks.forEach(cb => {
             try { cb(data); } catch (e) { console.warn(e); }
+          });
+          // Also trigger refresh callbacks for instant refetch
+          this.onRefreshCallbacks.forEach(cb => {
+            try { cb(); } catch (e) { console.warn(e); }
           });
         });
       }
@@ -184,13 +216,11 @@ class SignalRService {
         'ChatMessageDeleted', 'chatMessageDeleted', 'ThreadUpdated', 'threadUpdated',
         'RefreshOT', 'refreshOT', 'OTRefresh', 'otRefresh', 'OTBookingAdded', 'otBookingAdded',
         'OTBookingUpdated', 'otBookingUpdated', 'RefreshBooking', 'refreshBooking',
-        'OTRegisterUpdated', 'otRegisterUpdated', 'RefreshOTDashboard', 'refreshOTDashboard'
+        'OTRegisterUpdated', 'otRegisterUpdated', 'RefreshOTDashboard', 'refreshOTDashboard',
+        'NewDataAlert', 'newDataAlert', 'NewDataalert', 'newDataalert', 'NewData', 'newData',
+        'DataAlert', 'dataAlert', 'RefreshData', 'refreshData', 'DataRefreshed', 'dataRefreshed',
+        'RefreshList', 'refreshList', 'UpdateList', 'updateList', 'RefreshOTCallRegister', 'refreshOTCallRegister'
       ];
-      // NOTE: intentionally NOT listening for MessageSeen/MessageRead/etc. here.
-      // The backend broadcasts those right after this client's own chatMarkRead call;
-      // reacting to them by re-fetching (which itself calls chatMarkRead) creates an
-      // infinite read -> broadcast -> refetch -> read loop. The 5s poll in
-      // PatientTimelineScreen already keeps isSeen ticks in sync without this risk.
 
       for (const method of refreshMethods) {
         this.connection.on(method, () => {

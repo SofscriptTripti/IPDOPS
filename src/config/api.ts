@@ -30,5 +30,6 @@ export const API_CONFIG = {
     OT_CALL_REGISTER_LIST: '/otCallRegister/list',
     OT_CALL_REGISTER_GET_BY_ID: '/otCallRegister/getById',
     OT_CALL_REGISTER_UPDATE: '/otCallRegister/update',
+    OT_MST_LIST: '/getOtMstList',
   },
 };
